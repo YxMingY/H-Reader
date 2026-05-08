@@ -13,7 +13,7 @@
       <div v-if="view === 'reader'" class="toolbar">
         <div class="zoom-controls">
           <button @click="zoomOut" title="缩小">−</button>
-          <span class="zoom-level">{{ Math.round(logicScale * 100) }}%</span>
+          <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
           <button @click="zoomIn" title="放大">+</button>
           <button @click="fitWidth" title="适应宽度">Fit</button>
         </div>
@@ -66,12 +66,15 @@
             ref="pdfRef"
             :source="pdfSource"
             :scale="scale"
+            :width="pageWidth"
+            :annotation-layer="true"
+            :text-layer="true"
             @loaded="handleLoaded"
+            @rendered="enableTextSelection"
             @error="handleError"
-            class="pdf-document"
-            :width="pageWidths" 
+            class="pdf-document"  
           />
-        </div>
+        </div> 
         
         <!-- 底部悬浮提示（可选） -->
         <div class="scroll-hint" v-if="showScrollHint">
@@ -83,15 +86,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 import VuePdfEmbed from 'vue-pdf-embed';
 import * as pdfjsLib from 'pdfjs-dist';
-
+import 'pdfjs-dist/legacy/web/pdf_viewer.css';
+ 
 // 配置 Worker (保持你之前成功的配置)
 // 如果本地 public 下有文件，用 '/pdf.worker.min.js'，否则用 CDN
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 
-import { BookService } from '../bindings/changeme';
+import { BookService } from '../bindings/changeme'; //这个路径是正确的，不要修改
 
 // --- 状态定义 ---
 const view = ref('library');
@@ -99,20 +103,27 @@ const books = ref([]);
 const loading = ref(false);
 const currentBookTitle = ref('');
 const pdfSource = ref(null);
-const pdfRef = ref(null); // 👈 这里定义了
 const pdfInstance = ref(null); // 存储 PDF.js 实例
 const currentPage = ref(1); // 在连续模式下，这个值主要用于显示“当前可视区域大致页码”，实际滚动由浏览器原生处理
 const totalPages = ref(0);
 const scale = ref(1.0); // 缩放比例
-const logicScale = ref(1.0); // 逻辑缩放，适应宽度时使用
 const readerContainer = ref(null);
 const showScrollHint = ref(false);
-const pageWidths = ref(600); // 存储每页宽度，适应宽度时使用
-const standardPageWidth = 400; 
-
+const basePageWidth = ref(0); // 记录第一页在 scale=1 时的原始宽度
+const pageWidth = ref(600); // 通过 width 控制视觉缩放
+const zoomLevel = computed(() => {
+  if (!basePageWidth.value) return 1.0;
+  return pageWidth.value / basePageWidth.value;
+});
+ 
 // --- 书架逻辑 ---
 onMounted(async () => {
   loadLibrary();
+  window.addEventListener('resize', handleResize);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize);
 });
 
 const loadLibrary = async () => {
@@ -134,6 +145,8 @@ const openBook = async (book) => {
   currentPage.value = 1;
   totalPages.value = 0;
   pdfSource.value = null;
+  basePageWidth.value = 0;
+  pageWidth.value = 600;
   scale.value = 1.0; // 重置缩放
 
   try {
@@ -167,57 +180,72 @@ const handleLoaded = (pdf) => {
   totalPages.value = pdf.numPages;
   pdfInstance.value = pdf; // 存储 PDF.js 实例，后续可能需要
   console.log(`PDF 加载成功，共 ${pdf.numPages} 页`);
-   // 自动适应宽度逻辑：等待 DOM 渲染后计算
-  fitWidth();
+
+  // 用第一页真实宽度作为基准，避免不同 PDF 初始显示大小不一致
+  pdf.getPage(1)
+    .then((page) => {
+      const viewport = page.getViewport({ scale: 1 });
+      basePageWidth.value = viewport.width;
+      pageWidth.value = viewport.width;
+      fitWidth();
+    })
+    .catch((err) => {
+      console.error('读取第一页尺寸失败:', err);
+      basePageWidth.value = 595;
+      fitWidth();
+    });
 };
 
 const handleError = (err) => {
   console.error("PDF 渲染错误:", err);
 };
-
 // --- 缩放与滚动逻辑 ---
 const adjustScale = (newScale) => {
-  logicScale.value = newScale; // 同步逻辑缩放
-  scale.value = Math.max(1.0, newScale); // 实际缩放不小于 100%，保持清晰
-  pageWidths.value = standardPageWidth * newScale; // 更新页面宽度，强制适应
+  // 视觉尺寸由 width 控制；scale 主要提升渲染清晰度
+  if (basePageWidth.value) {
+    pageWidth.value = basePageWidth.value * newScale;
+  }
+
+  scale.value = Math.max(1.0, newScale);
 };
 const zoomIn = () => {
-  adjustScale(Math.min(logicScale.value + 0.1, 3.0)); // 最大 300%
+  adjustScale(Math.min(zoomLevel.value + 0.1, 3.0)); // 最大 300%
 };
 
 const zoomOut = () => {
-  adjustScale(Math.max(logicScale.value - 0.1, 0.5)); // 最小 50%
+  adjustScale(Math.max(zoomLevel.value - 0.1, 0.5)); // 最小 50%
 };
 
 const fitWidth = () => {
-  if (!readerContainer.value || !pdfInstance.value) return;
+  if (!readerContainer.value || !pdfInstance.value || !basePageWidth.value) return;
 
   // 获取容器的可用宽度（减去 padding）
-  const containerWidth = readerContainer.value.clientWidth - 40; 
-  
-  // 获取 PDF 的第一页原始宽度（pt 单位）
-  // vue-pdf-embed 内部引用了 pdfjs 实例，我们可以通过它获取
-  // 注意：不同版本的 vue-pdf-embed 暴露方式不同，这里尝试通用方式
-  
-  // 如果 pdfInstance.value 有 pageCount，说明加载成功了
-  if (pdfInstance.value.numPages > 0) {
-    // 尝试获取第一页的 viewport
-    // 由于 vue-pdf-embed 封装较深，我们用一个经验公式：
-    // A4 纸标准宽度约为 595pt。
-    // 如果 scale=1，canvas 宽度约为 595px。
-    let newScale = containerWidth / standardPageWidth;
-    
-    // 限制缩放范围，防止过大或过小
-    newScale = Math.max(0.5, Math.min(newScale, 3.0));
-    adjustScale(newScale);
-    console.log("Fit Width Scale:", newScale);
-  }
+  const containerWidth = Math.max(readerContainer.value.clientWidth - 40, 200);
+  let newScale = containerWidth / basePageWidth.value;
+
+  // 限制缩放范围，防止过大或过小
+  newScale = Math.max(0.5, Math.min(newScale, 3.0));
+  adjustScale(newScale);
+  console.log('Fit Width Scale:', newScale);
+};
+
+const handleResize = () => {
+  if (view.value !== 'reader') return;
+  fitWidth();
 };
 
 // 简单的滚轮辅助（可选，浏览器原生滚动通常已经足够好）
 const handleWheel = (e) => {
-  // 如果需要自定义平滑滚动可以在这里添加逻辑
-  // 目前依赖浏览器原生 overflow: auto 行为
+  if (!e.ctrlKey) return;
+
+  // Ctrl + 滚轮时拦截浏览器默认缩放，改为 PDF 缩放
+  e.preventDefault();
+
+  if (e.deltaY < 0) {
+    zoomIn();
+  } else {
+    zoomOut();
+  }
 };
 
 </script>
@@ -247,11 +275,14 @@ body {
   display: flex; 
   flex-direction: column; 
   height: 100vh; 
+  width: 100%;
 }
 
 /* --- 头部样式 --- */
 .header {
   height: 60px;
+  width: 100%;
+  box-sizing: border-box;
   background: var(--header-bg);
   border-bottom: 1px solid var(--border-color);
   display: flex;
@@ -264,6 +295,8 @@ body {
 
 .header-left {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: 15px;
   overflow: hidden; /* 关键：防止标题溢出 */
@@ -305,6 +338,7 @@ body {
   display: flex;
   align-items: center;
   gap: 20px;
+  margin-left: 16px;
   flex-shrink: 0;
 }
 
@@ -409,6 +443,7 @@ body {
   color: var(--text-primary);
   word-break: break-all;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2; /* 最多显示两行 */
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -426,6 +461,8 @@ body {
 /* --- 阅读器样式修正 --- */
 .reader-view {
   height: 100%;
+  width: 100%;
+  box-sizing: border-box;
   overflow-y: auto;
   background: #525659;
   display: flex;
@@ -438,7 +475,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: auto; /* 关键：不要设 width: 100% */
+  width: 100%;
   min-width: 0;
 }
 
@@ -447,18 +484,20 @@ body {
   margin-bottom: 20px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   background: white;
-  width: 500px !important; /* 关键：让宽度由内部 Canvas 决定 */
+  width: auto !important;
+  max-width: 100%;
   height: auto !important;
 }
 
 /* 彻底解放 Canvas */
 :deep(canvas) {
   display: block;
-  /* 移除所有 max-width, width, height 限制 */
-  max-width: none !important;
+  max-width: 100% !important;
   width: auto !important;
   height: auto !important;
 }
+
+/* PDF text layer selection moved to global style.css for better specificity */
 
 
 .scroll-hint {
