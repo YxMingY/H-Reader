@@ -1,5 +1,5 @@
 ﻿<script setup>
-import { ref, onMounted, onBeforeUnmount, watch, markRaw } from 'vue';
+import { ref, nextTick, onMounted, onBeforeUnmount, watch, markRaw } from 'vue';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // 配置 Worker（使用本地文件避免CORS问题）
@@ -18,8 +18,13 @@ const pdfDoc = ref(null);
 const totalPages = ref(0);
 const pageWidth = ref(600);
 const currentPages = ref(new Set()); // 当前可见的页码
-const renderingPages = ref(new Set()); // 正在渲染的页码
+const renderingPages = ref(new Set()); // 正在渲染的页码，避免重复渲染
 const currentPage = ref(1); // 当前显示的页码（用于翻页）
+
+// 动态 refs：存储每一页的 canvas、textLayer 和 pageContainer，用 Vue refs 替代 querySelector
+const pageCanvasRefs = {};
+const pageTextLayerRefs = {};
+const pageContainerRefs = {};
 
 const PAGE_GAP = 20;
 const RENDER_THROTTLE = 200;
@@ -27,6 +32,7 @@ let resizeTimeout = null;
 let renderTimeout = null;
 let scrollTimeout = null;
 let lastScrollTop = 0;
+let pageObserver = null;
 
 // 加载 PDF 文档
 const loadPdf = async (source) => {
@@ -34,19 +40,27 @@ const loadPdf = async (source) => {
     const pdf = await pdfjsLib.getDocument(source).promise;
     pdfDoc.value = markRaw(pdf);
     totalPages.value = pdf.numPages;
+    currentPage.value = 1;
+    currentPages.value.clear();
+    renderingPages.value.clear();
+    lastScrollTop = 0;
+    
+    // 清理旧的 refs
+    Object.keys(pageCanvasRefs).forEach(key => delete pageCanvasRefs[key]);
+    Object.keys(pageTextLayerRefs).forEach(key => delete pageTextLayerRefs[key]);
+    Object.keys(pageContainerRefs).forEach(key => delete pageContainerRefs[key]);
+    
     console.log(`PDF 加载成功，共 ${pdf.numPages} 页`);
 
-    // 清空容器
-    if (pdfCanvas.value) {
-      pdfCanvas.value.innerHTML = '';
-    }
-
-    // 初始化所有页面容器并适配宽度
+    // 页面壳子现在交给 Vue 的模板渲染；这里等它完成挂载，再继续做尺寸和观察器初始化
     await initializePages();
     fitWidth();
 
     // 使用第一页高度预先设置所有页面容器高度，确保滚动条位置正确
     await prepareInitialHeights();
+
+    // 等页面尺寸就位后再挂观察器，避免它过早读取到不完整的布局
+    setupIntersectionObserver();
 
     emit('loaded', pdf);
   } catch (err) {
@@ -54,38 +68,20 @@ const loadPdf = async (source) => {
   }
 };
 
-// 初始化页面容器
+// 初始化页面容器：现在只负责等 Vue 把模板里的页面壳子渲染出来
 const initializePages = async () => {
   if (!pdfCanvas.value || !totalPages.value) return;
 
-  const fragment = document.createDocumentFragment();
-
-  for (let pageNum = 1; pageNum <= totalPages.value; pageNum++) {
-    const pageContainer = document.createElement('div');
-    pageContainer.className = 'pdf-page-container';
-    pageContainer.dataset.pageNum = pageNum;
-    pageContainer.style.marginBottom = PAGE_GAP + 'px';
-
-    const canvas = document.createElement('canvas');
-    canvas.className = 'pdf-page-canvas';
-    canvas.dataset.pageNum = pageNum;
-
-    const textLayer = document.createElement('div');
-    textLayer.className = 'pdf-text-layer';
-    textLayer.dataset.pageNum = pageNum;
-
-    pageContainer.appendChild(canvas);
-    pageContainer.appendChild(textLayer);
-    fragment.appendChild(pageContainer);
-  }
-
-  pdfCanvas.value.appendChild(fragment);
-  setupIntersectionObserver();
+  await nextTick();
 };
 
 // 设置交叉观察器：只负责“哪些页进入可视范围后要开始渲染”，不负责决定当前页码
 const setupIntersectionObserver = () => {
-  const observer = new IntersectionObserver((entries) => {
+  if (pageObserver) {
+    pageObserver.disconnect();
+  }
+
+  pageObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       const pageNum = parseInt(entry.target.dataset.pageNum);
       
@@ -101,7 +97,7 @@ const setupIntersectionObserver = () => {
   });
   
   const pageContainers = pdfCanvas.value?.querySelectorAll('.pdf-page-container');
-  pageContainers?.forEach(container => observer.observe(container));
+  pageContainers?.forEach(container => pageObserver.observe(container));
 };
 
 // 更新当前页码并通知外部：这是页码状态的唯一入口，避免多个地方各自改 currentPage
@@ -138,7 +134,8 @@ const updateCurrentPageFromScroll = () => {
     }
 
     while (currentPage.value < totalPages.value) {
-      const currentContainer = pdfCanvas.value.querySelector(`.pdf-page-container[data-page-num="${currentPage.value}"]`);
+      // 用 Vue refs 而不是 querySelector 获取当前页容器
+      const currentContainer = pageContainerRefs[currentPage.value];
       if (!currentContainer) break;
 
       const currentRect = currentContainer.getBoundingClientRect();
@@ -161,7 +158,8 @@ const updateCurrentPageFromScroll = () => {
     }
 
     while (currentPage.value > 1) {
-      const currentContainer = pdfCanvas.value.querySelector(`.pdf-page-container[data-page-num="${currentPage.value}"]`);
+      // 用 Vue refs 而不是 querySelector 获取当前页容器
+      const currentContainer = pageContainerRefs[currentPage.value];
       if (!currentContainer) break;
 
       const currentRect = currentContainer.getBoundingClientRect();
@@ -196,21 +194,22 @@ const computePageViewport = (page) => {
 
 // 使用第1页的高度为所有页面容器预先设置高度，避免首屏滚动条先“跳一下”再稳定
 const prepareInitialHeights = async () => {
-  if (!pdfCanvas.value || !pdfDoc.value || totalPages.value === 0) return;
+  if (!pdfDoc.value || totalPages.value === 0) return;
 
   try {
     const firstPage = await pdfDoc.value.getPage(1);
     const { viewport } = computePageViewport(firstPage);
 
-    const pageContainers = pdfCanvas.value.querySelectorAll('.pdf-page-container');
-    pageContainers.forEach(container => {
-      container.style.height = viewport.height + 'px';
-      const canvas = container.querySelector('canvas.pdf-page-canvas');
-      if (canvas) {
+    // 用 Vue refs 遍历所有页面容器，而不是 querySelectorAll
+    for (let i = 1; i <= totalPages.value; i++) {
+      const container = pageContainerRefs[i];
+      const canvas = pageCanvasRefs[i];
+      if (container && canvas) {
+        container.style.height = viewport.height + 'px';
         canvas.style.width = viewport.width + 'px';
         canvas.style.height = viewport.height + 'px';
       }
-    });
+    }
   } catch (e) {
     console.warn('prepareInitialHeights failed', e);
   }
@@ -220,12 +219,15 @@ const prepareInitialHeights = async () => {
 const renderPage = async (pageNum) => {
   if (renderingPages.value.has(pageNum) || !pdfDoc.value) return;
   
+  // 标记正在渲染的页码，避免重复渲染
   renderingPages.value.add(pageNum);
   
   try {
     const page = await pdfDoc.value.getPage(pageNum);
-    const canvas = document.querySelector(`canvas[data-page-num="${pageNum}"]`);
-    const textLayer = document.querySelector(`.pdf-text-layer[data-page-num="${pageNum}"]`);
+    // 用 Vue refs 获取元素，而不是 querySelector
+    const canvas = pageCanvasRefs[pageNum];
+    const textLayer = pageTextLayerRefs[pageNum];
+    const pageContainer = pageContainerRefs[pageNum];
 
     if (!canvas) return;
 
@@ -253,8 +255,7 @@ const renderPage = async (pageNum) => {
 
     await page.render(renderContext).promise;
 
-    // 渲染完成后再回写容器高度，防止不同页纵横比不同导致布局重叠或留白不准
-    const pageContainer = document.querySelector(`.pdf-page-container[data-page-num="${pageNum}"]`);
+    // 渲染完成后再回写容器高度，防止页面之间重叠
     if (pageContainer) {
       pageContainer.style.height = canvas.style.height;
     }
@@ -348,7 +349,8 @@ const fitWidth = () => {
 const goToPage = (pageNum) => {
   if (pageNum < 1 || pageNum > totalPages.value) return;
   
-  const pageContainer = document.querySelector(`.pdf-page-container[data-page-num="${pageNum}"]`);
+  // 用 Vue refs 而不是 querySelector 获取页面容器
+  const pageContainer = pageContainerRefs[pageNum];
   if (pageContainer && readerContainer.value) {
     // 翻页接口直接滚动到目标容器；页码显示交给 setCurrentPage 和滚动回调保持一致
     pageContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -413,6 +415,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
   readerContainer.value?.removeEventListener('scroll', handleScroll);
+  if (pageObserver) pageObserver.disconnect();
   if (resizeTimeout) clearTimeout(resizeTimeout);
   if (renderTimeout) clearTimeout(renderTimeout);
   if (scrollTimeout) cancelAnimationFrame(scrollTimeout);
@@ -430,7 +433,40 @@ defineExpose({
 </script>
 <template>
   <div class="reader-view" ref="readerContainer">
-    <div class="pdf-canvas-container" ref="pdfCanvas"></div>
+    <div class="pdf-canvas-container" ref="pdfCanvas">
+      <div
+        v-for="pageNum in totalPages"
+        :key="pageNum"
+        class="pdf-page-container"
+        :data-page-num="pageNum"
+        :style="{ marginBottom: PAGE_GAP + 'px' }"
+        :ref="el =>
+          el
+            ? pageContainerRefs[pageNum] = el
+            : delete pageContainerRefs[pageNum]
+        "
+      >
+        <canvas
+          class="pdf-page-canvas"
+          :data-page-num="pageNum"
+          :ref="el =>
+            el
+              ? pageCanvasRefs[pageNum] = el
+              : delete pageCanvasRefs[pageNum]
+          "
+        ></canvas>
+
+        <div
+          class="pdf-text-layer"
+          :data-page-num="pageNum"
+          :ref="el =>
+            el
+              ? pageTextLayerRefs[pageNum] = el
+              : delete pageTextLayerRefs[pageNum]
+          "
+        ></div>
+      </div>
+    </div>
   </div>
 </template>
 

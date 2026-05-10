@@ -14,12 +14,21 @@
         <div class="page-navigation">
           <!-- 这里是快捷翻页入口，只负责发起动作，不直接操作滚动 DOM -->
           <button @click="goToPrevPage" title="上一页" class="nav-btn">←</button>
-          <span class="page-counter">{{ currentPage }} / {{ totalPages }}</span>
+          <div class="page-display">
+            <input
+              ref="pageInputRef"
+              class="page-input"
+              v-model.number="currentPage"
+              @keyup.enter="goToPageInput($event)"
+              @blur="goToPageInput"
+              :min="1"
+              :max="totalPages"
+              aria-label="页码"
+            />
+            <span class="page-delimiter">/</span>
+            <span class="page-total">{{ totalPages }}</span>
+          </div>
           <button @click="goToNextPage" title="下一页" class="nav-btn">→</button>
-        </div>
-        
-        <div class="page-info">
-          <span>{{ currentPage }} / {{ totalPages }}</span>
         </div>
       </div>
     </header>
@@ -30,11 +39,11 @@
       <Bookshelf v-if="view === 'library'" @select="openBook" />
 
       <!-- 阅读器视图：连续滚动模式 -->
+       <!-- Reader 负责决定当前页，App 只接收这个结果并更新工具栏显示 -->
       <Reader v-if="view === 'reader'"
         ref="readerRef"
         :pdfSource="pdfSource"
         @loaded="onPDFLoaded"
-        <!-- Reader 负责决定当前页，App 只接收这个结果并更新工具栏显示 -->
         @pagechange="currentPage = $event"
         @rescale="onPDFRescale"
       ></Reader>
@@ -122,6 +131,23 @@ const zoomOut = () => {
 
 const fitWidth = () => {
   readerRef.value?.fitWidth();
+};
+const pageInputRef = ref(null);
+
+const goToPageInput = (event) => {
+  let n = Number(currentPage.value);
+  if (!Number.isFinite(n) || n <= 0) {
+    currentPage.value = Math.min(Math.max(currentPage.value || 1, 1), totalPages.value || 1);
+    return;
+  }
+  n = Math.min(Math.max(Math.floor(n), 1), totalPages.value || 1);
+  currentPage.value = n;
+  readerRef.value?.goToPage(n);
+
+  // 如果由回车触发，则取消焦点（隐藏输入框）
+  if (event && event.type === 'keyup') {
+    pageInputRef.value?.blur();
+  }
 };
 
 </script>
@@ -223,8 +249,8 @@ body {
   align-items: center;
   background: #f0f2f5;
   border-radius: 8px;
-  padding: 4px;
-  gap: 5px;
+  padding: 2px 8px; /* 紧凑一点 */
+  gap: 8px;
 }
 
 .nav-btn {
@@ -244,12 +270,63 @@ body {
   background: #e6e6e6;
 }
 
-.page-counter {
-  font-size: 13px;
-  min-width: 50px;
-  text-align: center;
-  color: var(--text-secondary);
+.toolbar { --toolbar-font-size: 13px; }
+
+.page-display {
+  display: flex;
+  align-items: center;
+  gap: 0; /* 不要额外间距，由分隔符内部 margin 控制 */
+}
+
+.page-total {
+  width: 32px; /* 与 page-input 宽度相同 */
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--toolbar-font-size);
+  color: var(--text-primary);
   font-variant-numeric: tabular-nums;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.page-input {
+  width: 32px; /* 固定宽度 */
+  height: 28px;
+  text-align: center;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 0 6px;
+  transition: background-color 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+  font-size: var(--toolbar-font-size);
+  color: var(--text-primary);
+}
+
+.page-input:focus {
+  border-color: var(--border-color);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0,122,204,0.08);
+  outline: none;
+}
+
+/* 悬停时也显示输入框的边框和背景，但不改变宽度 */
+.page-navigation:hover .page-input {
+  border-color: var(--border-color);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(0,122,204,0.04);
+}
+
+/* 分隔符：确保左右间距完全对称 */
+.page-delimiter {
+  display: inline-block;
+  margin: 0 4px; /* 紧凑但对称 */
+  color: var(--text-secondary);
+  font-size: var(--toolbar-font-size);
+  line-height: 1;
+  width: auto;
 }
 
 .page-info {
