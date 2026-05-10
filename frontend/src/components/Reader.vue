@@ -178,6 +178,41 @@ const handleScroll = () => {
   scrollTimeout = requestAnimationFrame(updateCurrentPageFromScroll);
 };
 
+// 处理 Ctrl+滚轮缩放
+let wheelTimeout = null;
+const handleWheel = (event) => {
+  // 检测 Ctrl 或 Cmd 键
+  if (!event.ctrlKey && !event.metaKey) return;
+  
+  event.preventDefault();
+  
+  // 节流：避免频繁重新渲染
+  if (wheelTimeout) return;
+  
+  wheelTimeout = setTimeout(() => {
+    wheelTimeout = null;
+  }, 100);
+  
+  // 根据滚轮方向调整缩放比例
+  const zoomStep = 1.1; // 缩放步长
+  const minWidth = 200; // 最小宽度
+  const maxWidth = 1200; // 最大宽度
+  
+  let newWidth = pageWidth.value;
+  if (event.deltaY < 0) {
+    // 向上滚动：放大
+    newWidth = Math.min(pageWidth.value * zoomStep, maxWidth);
+  } else {
+    // 向下滚动：缩小
+    newWidth = Math.max(pageWidth.value / zoomStep, minWidth);
+  }
+  
+  if (newWidth !== pageWidth.value) {
+    pageWidth.value = newWidth;
+    rerenderVisiblePages();
+  }
+};
+
 // 计算页面的 viewport 和 outputScale
 const computePageViewport = (page) => {
   const pageWidthInPoints = page.view[2] - page.view[0];  // PDF 页面宽度（单位：点, 也就是1/72英寸）
@@ -406,6 +441,7 @@ watch(() => props.pdfSource, async (newSource) => {
 onMounted(() => {
   window.addEventListener('resize', handleResize);
   readerContainer.value?.addEventListener('scroll', handleScroll, { passive: true });
+  readerContainer.value?.addEventListener('wheel', handleWheel, { passive: false });
   
   if (props.pdfSource) {
     loadPdf(props.pdfSource);
@@ -415,10 +451,12 @@ onMounted(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
   readerContainer.value?.removeEventListener('scroll', handleScroll);
+  readerContainer.value?.removeEventListener('wheel', handleWheel);
   if (pageObserver) pageObserver.disconnect();
   if (resizeTimeout) clearTimeout(resizeTimeout);
   if (renderTimeout) clearTimeout(renderTimeout);
   if (scrollTimeout) cancelAnimationFrame(scrollTimeout);
+  if (wheelTimeout) clearTimeout(wheelTimeout);
 });
 
 defineExpose({
@@ -477,7 +515,7 @@ defineExpose({
   width: 100vw;
   box-sizing: border-box;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto; /* 允许左右滚动缩放后的内容 */
   background: #525659;
   display: flex;
   justify-content: center; /* 居中显示 */
