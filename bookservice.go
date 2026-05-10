@@ -5,9 +5,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-type BookService struct{}
+type BookService struct {
+	scanDir string
+}
 
 // BookInfo 书籍信息结构
 type BookInfo struct {
@@ -16,13 +20,34 @@ type BookInfo struct {
 	Path  string `json:"path"`
 }
 
+func (a *BookService) GetScanDir() string {
+	home, _ := os.UserHomeDir()
+	defaultDir := filepath.Join(home, "Documents", "Papers")
+	if a.scanDir != "" {
+		return a.scanDir
+	}
+	return defaultDir
+}
+
+func (a *BookService) ChooseDir() (string, error) {
+	path, err := application.Get().Dialog.OpenFile().
+		SetTitle("Select Folder").
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		PromptForSingleSelection()
+	if err != nil {
+		return "", err
+	}
+	a.scanDir = path
+	return path, nil
+}
+
 // ScanBooks: 扫描文件夹
 func (a *BookService) ScanBooks(dirPath string) []BookInfo {
 	var books []BookInfo
 
 	if dirPath == "" {
-		home, _ := os.UserHomeDir()
-		dirPath = filepath.Join(home, "Documents", "Papers")
+		dirPath = a.GetScanDir()
 		os.MkdirAll(dirPath, 0755)
 	}
 

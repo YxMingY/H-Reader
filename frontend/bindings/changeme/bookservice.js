@@ -11,6 +11,20 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as $models from "./models.js";
 
 /**
+ * @returns {$CancellablePromise<string>}
+ */
+export function ChooseDir() {
+    return $Call.ByID(2623288092);
+}
+
+/**
+ * @returns {$CancellablePromise<string>}
+ */
+export function GetScanDir() {
+    return $Call.ByID(509388640);
+}
+
+/**
  * LoadPDF: 读取文件内容返回给前端
  * @param {string} path
  * @returns {$CancellablePromise<string>}

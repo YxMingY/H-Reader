@@ -338,7 +338,8 @@ body {
 /* --- 主内容区 --- */
 .main-content { 
   flex: 1; 
-  overflow: hidden; 
+  min-height: 0;
+  /* overflow: hidden;  */
   position: relative; 
 }
 
