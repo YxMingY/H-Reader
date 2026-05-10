@@ -42,6 +42,9 @@ const loadPdf = async (source) => {
     await initializePages();
     fitWidth();
 
+    // 使用第一页高度预先设置所有页面容器高度，确保滚动条位置正确
+    await prepareInitialHeights();
+
     emit('loaded', pdf);
   } catch (err) {
     console.error('PDF 加载失败:', err);
@@ -98,6 +101,42 @@ const setupIntersectionObserver = () => {
   pageContainers?.forEach(container => observer.observe(container));
 };
 
+// 计算页面的 viewport 和 outputScale
+const computePageViewport = (page) => {
+  const pageWidthInPoints = page.view[2] - page.view[0];  // PDF 页面宽度（单位：点, 也就是1/72英寸）
+  const scale = pageWidth.value / pageWidthInPoints; // 每个点对应的像素数，pageWidth是我们设定的页面宽度（单位：像素）
+  // 根据我们提供的scale计算viewport，viewport.width应该等于pageWidth.value
+  //  viewport包含了页面的尺寸和变换信息，比如页面的宽高（单位：像素）
+  const viewport = page.getViewport({ scale });
+  // 高分辨率渲染（考虑 devicePixelRatio）
+  // devicePixelRatio 是一个表示设备像素与CSS像素之间关系的值。对于普通屏幕，这个值通常是1；
+  // 对于高DPI屏幕（如Retina显示屏），这个值可能是2或更高。这意味着在高DPI屏幕上，每个CSS像素实际上由多个物理像素组成。
+  const outputScale = window.devicePixelRatio || 1;
+  return { viewport, outputScale };
+};
+
+// 使用第1页的高度为所有页面容器预先设置高度，避免初始布局抖动
+const prepareInitialHeights = async () => {
+  if (!pdfCanvas.value || !pdfDoc.value || totalPages.value === 0) return;
+
+  try {
+    const firstPage = await pdfDoc.value.getPage(1);
+    const { viewport } = computePageViewport(firstPage);
+
+    const pageContainers = pdfCanvas.value.querySelectorAll('.pdf-page-container');
+    pageContainers.forEach(container => {
+      container.style.height = viewport.height + 'px';
+      const canvas = container.querySelector('canvas.pdf-page-canvas');
+      if (canvas) {
+        canvas.style.width = viewport.width + 'px';
+        canvas.style.height = viewport.height + 'px';
+      }
+    });
+  } catch (e) {
+    console.warn('prepareInitialHeights failed', e);
+  }
+};
+
 // 渲染单一页面
 const renderPage = async (pageNum) => {
   if (renderingPages.value.has(pageNum) || !pdfDoc.value) return;
@@ -111,16 +150,8 @@ const renderPage = async (pageNum) => {
 
     if (!canvas) return;
 
-    const pageWidthInPoints = page.view[2] - page.view[0];  // PDF 页面宽度（单位：点, 也就是1/72英寸）
-    const scale = pageWidth.value / pageWidthInPoints; // 每个点对应的像素数，pageWidth是我们设定的页面宽度（单位：像素）
-    // 根据我们提供的scale计算viewport，viewport.width应该等于pageWidth.value
-    //  viewport包含了页面的尺寸和变换信息，比如页面的宽高（单位：像素）
-    const viewport = page.getViewport({ scale }); 
+    const { viewport, outputScale } = computePageViewport(page);
     console.log(viewport);
-    // 高分辨率渲染（考虑 devicePixelRatio）
-    // devicePixelRatio 是一个表示设备像素与CSS像素之间关系的值。对于普通屏幕，这个值通常是1；
-    // 对于高DPI屏幕（如Retina显示屏），这个值可能是2或更高。这意味着在高DPI屏幕上，每个CSS像素实际上由多个物理像素组成。
-    const outputScale = window.devicePixelRatio || 1;
     // canvas.width和canvas.height是画布的实际像素尺寸，canvas.style.width和canvas.style.height是画布在页面上的显示尺寸
     // 即前者决定了渲染的清晰度，后者决定了画布在页面上的大小。
     // 通过设置canvas.width和canvas.height为viewport的尺寸乘以outputScale，我们确保了在高DPI屏幕上渲染的清晰度。
@@ -142,6 +173,12 @@ const renderPage = async (pageNum) => {
     };
 
     await page.render(renderContext).promise;
+
+    // 根据实际渲染的 canvas 尺寸更新容器高度，避免不同页面高度不一致导致重叠
+    const pageContainer = document.querySelector(`.pdf-page-container[data-page-num="${pageNum}"]`);
+    if (pageContainer) {
+      pageContainer.style.height = canvas.style.height;
+    }
 
     // 渲染文本层用于选择
     if (textLayer) {
