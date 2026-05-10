@@ -9,7 +9,7 @@ const props = defineProps({
   pdfSource: String,
 });
 
-const emit = defineEmits(['loaded']);
+const emit = defineEmits(['loaded', 'pagechange']);
 
 // 状态管理
 const readerContainer = ref(null);
@@ -19,11 +19,14 @@ const totalPages = ref(0);
 const pageWidth = ref(600);
 const currentPages = ref(new Set()); // 当前可见的页码
 const renderingPages = ref(new Set()); // 正在渲染的页码
+const currentPage = ref(1); // 当前显示的页码（用于翻页）
 
 const PAGE_GAP = 20;
 const RENDER_THROTTLE = 200;
 let resizeTimeout = null;
 let renderTimeout = null;
+let scrollTimeout = null;
+let lastScrollTop = 0;
 
 // 加载 PDF 文档
 const loadPdf = async (source) => {
@@ -80,7 +83,7 @@ const initializePages = async () => {
   setupIntersectionObserver();
 };
 
-// 设置交叉观察器
+// 设置交叉观察器：只负责“哪些页进入可视范围后要开始渲染”，不负责决定当前页码
 const setupIntersectionObserver = () => {
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
@@ -101,6 +104,82 @@ const setupIntersectionObserver = () => {
   pageContainers?.forEach(container => observer.observe(container));
 };
 
+// 更新当前页码并通知外部：这是页码状态的唯一入口，避免多个地方各自改 currentPage
+const setCurrentPage = (pageNum, notify = true) => {
+  const nextPage = Math.min(Math.max(pageNum, 1), totalPages.value || 1);
+
+  if (nextPage === currentPage.value) return;
+
+  currentPage.value = nextPage;
+
+  if (notify) {
+    emit('pagechange', nextPage);
+  }
+};
+
+// 根据滚动方向和页边界计算当前页码：向下时等上一页完全消失再切到下一页；向上时同理
+const updateCurrentPageFromScroll = () => {
+  if (!readerContainer.value || !pdfCanvas.value) return;
+
+  const scrollTop = readerContainer.value.scrollTop;
+  const maxScrollTop = Math.max(readerContainer.value.scrollHeight - readerContainer.value.clientHeight, 0);
+  const containerRect = readerContainer.value.getBoundingClientRect();
+  const scrollingDown = scrollTop > lastScrollTop;
+  const scrollingUp = scrollTop < lastScrollTop;
+
+  lastScrollTop = scrollTop;
+
+  // 向下滚动时，只有当前页完全离开视口上边界，才进入下一页
+  if (scrollingDown) {
+    // 最后一页没有“下一页”可等它完全消失，所以滚动到底部时直接切到最后一页
+    if (scrollTop >= maxScrollTop - 1) {
+      setCurrentPage(totalPages.value);
+      return;
+    }
+
+    while (currentPage.value < totalPages.value) {
+      const currentContainer = pdfCanvas.value.querySelector(`.pdf-page-container[data-page-num="${currentPage.value}"]`);
+      if (!currentContainer) break;
+
+      const currentRect = currentContainer.getBoundingClientRect();
+      if (currentRect.bottom <= containerRect.top + 1) {
+        setCurrentPage(currentPage.value + 1);
+      } else {
+        break;
+      }
+    }
+
+    return;
+  }
+
+  // 向上滚动时，只有当前页完全离开视口下边界，才回到上一页
+  if (scrollingUp) {
+    // 第一页没有“上一页”可等它完全消失，所以滚动到顶部时直接切回第一页
+    if (scrollTop <= 0) {
+      setCurrentPage(1);
+      return;
+    }
+
+    while (currentPage.value > 1) {
+      const currentContainer = pdfCanvas.value.querySelector(`.pdf-page-container[data-page-num="${currentPage.value}"]`);
+      if (!currentContainer) break;
+
+      const currentRect = currentContainer.getBoundingClientRect();
+      if (currentRect.top >= containerRect.bottom - 1) {
+        setCurrentPage(currentPage.value - 1);
+      } else {
+        break;
+      }
+    }
+  }
+};
+
+const handleScroll = () => {
+  // 滚动事件很密集，先取消上一帧的计算，把页码判断压到下一帧执行
+  if (scrollTimeout) cancelAnimationFrame(scrollTimeout);
+  scrollTimeout = requestAnimationFrame(updateCurrentPageFromScroll);
+};
+
 // 计算页面的 viewport 和 outputScale
 const computePageViewport = (page) => {
   const pageWidthInPoints = page.view[2] - page.view[0];  // PDF 页面宽度（单位：点, 也就是1/72英寸）
@@ -115,7 +194,7 @@ const computePageViewport = (page) => {
   return { viewport, outputScale };
 };
 
-// 使用第1页的高度为所有页面容器预先设置高度，避免初始布局抖动
+// 使用第1页的高度为所有页面容器预先设置高度，避免首屏滚动条先“跳一下”再稳定
 const prepareInitialHeights = async () => {
   if (!pdfCanvas.value || !pdfDoc.value || totalPages.value === 0) return;
 
@@ -137,7 +216,7 @@ const prepareInitialHeights = async () => {
   }
 };
 
-// 渲染单一页面
+// 渲染单一页面：先算尺寸，再画 canvas，最后再补文本层
 const renderPage = async (pageNum) => {
   if (renderingPages.value.has(pageNum) || !pdfDoc.value) return;
   
@@ -174,7 +253,7 @@ const renderPage = async (pageNum) => {
 
     await page.render(renderContext).promise;
 
-    // 根据实际渲染的 canvas 尺寸更新容器高度，避免不同页面高度不一致导致重叠
+    // 渲染完成后再回写容器高度，防止不同页纵横比不同导致布局重叠或留白不准
     const pageContainer = document.querySelector(`.pdf-page-container[data-page-num="${pageNum}"]`);
     if (pageContainer) {
       pageContainer.style.height = canvas.style.height;
@@ -257,11 +336,38 @@ const renderTextLayer = (textContent, viewport, textLayer) => {
 const fitWidth = () => {
   if (!readerContainer.value) return;
   
+  // 这里只改“页面宽度”，高度会跟着每页自己的 viewport 在渲染时重新确定
   const containerWidth = Math.max(readerContainer.value.clientWidth - 40, 200);
   pageWidth.value = containerWidth;
   
   // 重新渲染所有可见页面
   rerenderVisiblePages();
+};
+
+// 滚动到指定页面
+const goToPage = (pageNum) => {
+  if (pageNum < 1 || pageNum > totalPages.value) return;
+  
+  const pageContainer = document.querySelector(`.pdf-page-container[data-page-num="${pageNum}"]`);
+  if (pageContainer && readerContainer.value) {
+    // 翻页接口直接滚动到目标容器；页码显示交给 setCurrentPage 和滚动回调保持一致
+    pageContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setCurrentPage(pageNum);
+  }
+};
+
+// 翻到下一页
+const goToNextPage = () => {
+  if (currentPage.value < totalPages.value) {
+    goToPage(currentPage.value + 1);
+  }
+};
+
+// 翻到上一页
+const goToPrevPage = () => {
+  if (currentPage.value > 1) {
+    goToPage(currentPage.value - 1);
+  }
 };
 
 // 重新渲染可见页面
@@ -297,6 +403,7 @@ watch(() => props.pdfSource, async (newSource) => {
 // 生命周期
 onMounted(() => {
   window.addEventListener('resize', handleResize);
+  readerContainer.value?.addEventListener('scroll', handleScroll, { passive: true });
   
   if (props.pdfSource) {
     loadPdf(props.pdfSource);
@@ -305,14 +412,20 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize);
+  readerContainer.value?.removeEventListener('scroll', handleScroll);
   if (resizeTimeout) clearTimeout(resizeTimeout);
   if (renderTimeout) clearTimeout(renderTimeout);
+  if (scrollTimeout) cancelAnimationFrame(scrollTimeout);
 });
 
 defineExpose({
   pdfDoc,
   totalPages,
+  currentPage,
   renderPage,
+  goToPage,
+  goToNextPage,
+  goToPrevPage,
 });
 </script>
 <template>
@@ -378,6 +491,7 @@ defineExpose({
   white-space: pre;
   transform-origin: 0 0;
   line-height: 1;
+  user-select: text;
   -webkit-user-select: text;
   cursor: text;
 }

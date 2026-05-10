@@ -11,11 +11,11 @@
       
       <!-- 阅读器工具栏：仅在阅读模式下显示 -->
       <div v-if="view === 'reader'" class="toolbar">
-        <div class="zoom-controls">
-          <button @click="zoomOut" title="缩小">−</button>
-          <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-          <button @click="zoomIn" title="放大">+</button>
-          <button @click="fitWidth" title="适应宽度">Fit</button>
+        <div class="page-navigation">
+          <!-- 这里是快捷翻页入口，只负责发起动作，不直接操作滚动 DOM -->
+          <button @click="goToPrevPage" title="上一页" class="nav-btn">←</button>
+          <span class="page-counter">{{ currentPage }} / {{ totalPages }}</span>
+          <button @click="goToNextPage" title="下一页" class="nav-btn">→</button>
         </div>
         
         <div class="page-info">
@@ -34,6 +34,8 @@
         ref="readerRef"
         :pdfSource="pdfSource"
         @loaded="onPDFLoaded"
+        <!-- Reader 负责决定当前页，App 只接收这个结果并更新工具栏显示 -->
+        @pagechange="currentPage = $event"
         @rescale="onPDFRescale"
       ></Reader>
     </main>
@@ -41,7 +43,7 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue';
 
 import Bookshelf from './components/Bookshelf.vue';
 import Reader from './components/Reader.vue';
@@ -100,6 +102,14 @@ const onPDFLoaded = (pdf) => {
 
 const onPDFRescale = (newScale) => {
   zoomLevel.value = newScale;
+};
+
+const goToNextPage = () => {
+  readerRef.value?.goToNextPage();
+};
+
+const goToPrevPage = () => {
+  readerRef.value?.goToPrevPage();
 };
 
 const zoomIn = () => {
@@ -208,7 +218,7 @@ body {
   flex-shrink: 0;
 }
 
-.zoom-controls {
+.page-navigation {
   display: flex;
   align-items: center;
   background: #f0f2f5;
@@ -217,7 +227,7 @@ body {
   gap: 5px;
 }
 
-.zoom-controls button {
+.nav-btn {
   border: none;
   background: white;
   width: 28px;
@@ -227,17 +237,19 @@ body {
   font-weight: bold;
   color: var(--text-primary);
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  font-size: 14px;
 }
 
-.zoom-controls button:hover {
+.nav-btn:hover {
   background: #e6e6e6;
 }
 
-.zoom-level {
+.page-counter {
   font-size: 13px;
-  min-width: 40px;
+  min-width: 50px;
   text-align: center;
   color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
 }
 
 .page-info {
