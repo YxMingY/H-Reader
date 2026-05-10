@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { ref, onMounted, onBeforeUnmount, watch, markRaw } from 'vue';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -19,7 +19,6 @@ const totalPages = ref(0);
 const pageWidth = ref(600);
 const currentPages = ref(new Set()); // 当前可见的页码
 const renderingPages = ref(new Set()); // 正在渲染的页码
-const pageHeights = ref({}); // 存储每页的高度缓存
 
 const PAGE_GAP = 20;
 const RENDER_THROTTLE = 200;
@@ -69,7 +68,6 @@ const initializePages = async () => {
     textLayer.className = 'pdf-text-layer';
     textLayer.dataset.pageNum = pageNum;
 
-    pageContainer.style.position = 'relative';
     pageContainer.appendChild(canvas);
     pageContainer.appendChild(textLayer);
     fragment.appendChild(pageContainer);
@@ -113,29 +111,37 @@ const renderPage = async (pageNum) => {
 
     if (!canvas) return;
 
-    const pageWidthInPoints = page.view[2] - page.view[0];
-    const scale = pageWidth.value / pageWidthInPoints;
-    const viewport = page.getViewport({ scale });
-
+    const pageWidthInPoints = page.view[2] - page.view[0];  // PDF 页面宽度（单位：点, 也就是1/72英寸）
+    const scale = pageWidth.value / pageWidthInPoints; // 每个点对应的像素数，pageWidth是我们设定的页面宽度（单位：像素）
+    // 根据我们提供的scale计算viewport，viewport.width应该等于pageWidth.value
+    //  viewport包含了页面的尺寸和变换信息，比如页面的宽高（单位：像素）
+    const viewport = page.getViewport({ scale }); 
+    console.log(viewport);
     // 高分辨率渲染（考虑 devicePixelRatio）
+    // devicePixelRatio 是一个表示设备像素与CSS像素之间关系的值。对于普通屏幕，这个值通常是1；
+    // 对于高DPI屏幕（如Retina显示屏），这个值可能是2或更高。这意味着在高DPI屏幕上，每个CSS像素实际上由多个物理像素组成。
     const outputScale = window.devicePixelRatio || 1;
+    // canvas.width和canvas.height是画布的实际像素尺寸，canvas.style.width和canvas.style.height是画布在页面上的显示尺寸
+    // 即前者决定了渲染的清晰度，后者决定了画布在页面上的大小。
+    // 通过设置canvas.width和canvas.height为viewport的尺寸乘以outputScale，我们确保了在高DPI屏幕上渲染的清晰度。
     canvas.width = Math.floor(viewport.width * outputScale);
     canvas.height = Math.floor(viewport.height * outputScale);
     canvas.style.width = viewport.width + 'px';
     canvas.style.height = viewport.height + 'px';
 
+    // context.setTransform()方法用于设置当前的变换矩阵。通过将outputScale应用于x和y轴，我们确保了在高DPI屏幕上渲染的内容被正确缩放，从而保持清晰度。
     const context = canvas.getContext('2d');
+    // context.setTransform()的函数原型是：context.setTransform(a, b, c, d, e, f)，其中a、b、c、d、e、f分别对应变换矩阵的元素。通过将outputScale应用于a和d，我们实现了在x和y轴上的缩放。
+    // 即，canvas.width和canvas.height调整了画布大小，而context.setTransform()确保了绘制的内容按照正确的比例缩放，从而在高DPI屏幕上保持清晰。
     context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
-
+    
+    // 渲染页面，renderContext包含了canvas的2D渲染上下文和页面的viewport信息，pdf.js会根据这些信息将PDF页面渲染到canvas上。
     const renderContext = {
       canvasContext: context,
       viewport: viewport,
     };
 
     await page.render(renderContext).promise;
-
-    // 缓存高度
-    pageHeights.value[pageNum] = viewport.height;
 
     // 渲染文本层用于选择
     if (textLayer) {
@@ -155,54 +161,59 @@ const renderPage = async (pageNum) => {
   }
 };
 
-// 手动渲染文本层
-const renderTextLayer = (textContent, viewport, container) => {
-  container.innerHTML = '';
-  const vt = viewport.transform;
-  const scale = viewport.scale || 1;
+/**
+ * 渲染 PDF 文本层（DOM，用于选择/复制）
+ * @param {Object} textContent - page.getTextContent() 的结果
+ * @param {PDFPageViewport} viewport - 与 canvas 使用的同一个 viewport
+ * @param {HTMLElement} textLayer - .pdf-text-layer 元素
+ */
+const renderTextLayer = (textContent, viewport, textLayer) => {
+  if (!textLayer) return;
 
-  textContent.items.forEach((item) => {
-    let t;
-    if (item.transform) {
-      t = pdfjsLib.Util.transform(vt, item.transform);
-    } else if (item.x !== undefined && item.y !== undefined) {
-      // fallback when items provide x/y
-      const x0 = item.x;
-      const y0 = item.y;
-      t = [vt[0], vt[1], vt[2], vt[3], vt[0] * x0 + vt[4], vt[3] * y0 + vt[5]];
-    } else {
-      // can't place this item
-      console.warn('Text item missing transform and x/y:', item);
-      return;
+  textLayer.innerHTML = '';
+  textLayer.style.width = viewport.width + 'px';
+  textLayer.style.height = viewport.height + 'px';
+
+  const viewportTransform = viewport.transform;
+
+  for (const item of textContent.items) {
+    if (!item.str) continue;
+
+    const span = document.createElement('span');
+    span.textContent = item.str;
+
+    // PDF → viewport
+    const tx = pdfjsLib.Util.transform(
+      viewportTransform,
+      item.transform
+    );
+
+    let [a, b, c, d, e, f] = tx;
+
+    // ⭐ 关键：基线 → 左上角修正
+    const ascent = item.height * 0.8;
+    f -= ascent;
+    // ⭐ 核心：只修正文字方向，不翻整页
+     c = -c;
+     d = -d;
+
+    span.style.transform = `matrix(${a}, ${b}, ${c}, ${d}, ${e}, ${f})`;
+    span.style.transformOrigin = '0 0';
+
+    const font = textContent.styles[item.fontName];
+    if (font?.fontFamily) {
+      span.style.fontFamily = font.fontFamily;
     }
 
-    const x = t[4];
-    const y = t[5];
-    const fontHeight = Math.abs((item.height || 10) * scale);
+    span.style.fontSize = '1px';
+    span.style.lineHeight = '1';
+    span.style.position = 'absolute';
+    span.style.whiteSpace = 'pre';
+    span.style.userSelect = 'text';
+    span.style.webkitUserSelect = 'text';
 
-
-    console.log('Rendering text item:', {
-      str: item.str,
-      x: x.toFixed(2),
-      y: y.toFixed(2),
-      fontHeight: fontHeight.toFixed(2),
-      fontName: item.fontName,
-    });
-    const div = document.createElement('span');
-    div.textContent = item.str;
-    div.className = 'pdf-text-div';
-    div.style.position = 'absolute';
-    div.style.left = x + 'px';
-    div.style.top = (y - fontHeight * 0.85) + 'px';
-    div.style.fontSize = fontHeight + 'px';
-    div.style.lineHeight = fontHeight + 'px';
-    div.style.fontFamily = item.fontName || 'sans-serif';
-    div.style.whiteSpace = 'pre';
-    div.style.cursor = 'text';
-    div.style.color = 'transparent';
-    div.style.userSelect = 'text';
-    container.appendChild(div);
-  });
+    textLayer.appendChild(span);
+  }
 };
 
 // 自适应宽度
@@ -274,7 +285,7 @@ defineExpose({
 </template>
 
 
-<style scoped>
+<style>
 .reader-view {
   height: 100%;
   width: 100vw;
@@ -285,7 +296,6 @@ defineExpose({
   display: flex;
   justify-content: center; /* 居中显示 */
   padding: 20px;
-  position: relative;
 }
 
 .pdf-canvas-container {
@@ -300,28 +310,37 @@ defineExpose({
   margin-bottom: 20px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   width: fit-content;
+  
+  position: relative;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
 }
 
 .pdf-page-canvas {
   display: block;
+  z-index: 1;
 }
 
 .pdf-text-layer {
   position: absolute;
   left: 0;
   top: 0;
-  right: 0;
-  bottom: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: auto;
   user-select: text;
   -webkit-user-select: text;
+  z-index: 2;
+  color: transparent;
 }
 
-.pdf-text-div {
-  color: transparent;
+.pdf-text-layer span {
   position: absolute;
   white-space: pre;
-  user-select: text;
+  transform-origin: 0 0;
+  line-height: 1;
   -webkit-user-select: text;
   cursor: text;
 }
