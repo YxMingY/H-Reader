@@ -1,4 +1,4 @@
-# H-Reader: New Generation's PDF Reader
+# H-Reader: 哪里不会点哪里的PDF阅读器
 
 ## Features:
 - PDF Manage
