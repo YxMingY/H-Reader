@@ -368,7 +368,7 @@ const renderTextLayer = (textContent, viewport, textLayer) => {
   }
 };
 
-// 自适应宽度
+// 根据窗口大小自适应画布宽度
 const fitWidth = () => {
   if (!readerContainer.value) return;
   

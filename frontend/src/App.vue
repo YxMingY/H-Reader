@@ -279,8 +279,9 @@ body {
 }
 
 .page-total {
-  width: 32px; /* 与 page-input 宽度相同 */
+  width: 28px; /* 与 page-input 宽度相同 */
   height: 28px;
+  margin: 0 4px; /* 分隔符左右间距 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -293,8 +294,9 @@ body {
 }
 
 .page-input {
-  width: 32px; /* 固定宽度 */
+  width: 28px; /* 固定宽度 */
   height: 28px;
+  margin: 0 4px; /* 与 page-total 间距 */
   text-align: center;
   border-radius: 4px;
   border: 1px solid transparent;
@@ -322,7 +324,7 @@ body {
 /* 分隔符：确保左右间距完全对称 */
 .page-delimiter {
   display: inline-block;
-  margin: 0 4px; /* 紧凑但对称 */
+  margin: 0; /* 紧凑但对称 */
   color: var(--text-secondary);
   font-size: var(--toolbar-font-size);
   line-height: 1;
