@@ -8,7 +8,27 @@
         </button>
         <h2 class="app-title">{{ view === 'library' ? 'H-Reader' : currentBookTitle }}</h2>
       </div>
-      
+
+      <div v-if="view === 'library'" class="toolbar library-toolbar">
+        <div class="settings-anchor">
+          <button
+            class="btn-icon btn-square settings-btn"
+            @click="toggleSettings"
+            title="设置"
+            aria-label="设置"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 8.75a3.25 3.25 0 1 0 0 6.5 3.25 3.25 0 0 0 0-6.5Zm8.08 3.43-.95-.55c.05-.4.07-.8.07-1.2s-.02-.8-.07-1.2l.95-.55a1.5 1.5 0 0 0 .55-2.05l-1.15-1.99a1.5 1.5 0 0 0-2.05-.55l-.96.55a8.3 8.3 0 0 0-2.07-1.2V2.86A1.5 1.5 0 0 0 12.5 1.36h-2.3a1.5 1.5 0 0 0-1.5 1.5v1.08c-.73.24-1.43.64-2.07 1.2l-.96-.55a1.5 1.5 0 0 0-2.05.55L2.47 7.13a1.5 1.5 0 0 0 .55 2.05l.95.55c-.05.4-.07.8-.07 1.2s.02.8.07 1.2l-.95.55a1.5 1.5 0 0 0-.55 2.05l1.15 1.99a1.5 1.5 0 0 0 2.05.55l.96-.55c.64.56 1.34.96 2.07 1.2v1.08a1.5 1.5 0 0 0 1.5 1.5h2.3a1.5 1.5 0 0 0 1.5-1.5v-1.08c.73-.24 1.43-.64 2.07-1.2l.96.55a1.5 1.5 0 0 0 2.05-.55l1.15-1.99a1.5 1.5 0 0 0-.55-2.05Zm-6.08 1.82a5.25 5.25 0 1 1 0-10.5 5.25 5.25 0 0 1 0 10.5Z"/>
+            </svg>
+          </button>
+          <SettingsMenu
+            v-model:open="settingsOpen"
+            :api-key="apiKey"
+            @save="saveApiKey"
+          />
+        </div>
+      </div>
+
       <!-- 阅读器工具栏：仅在阅读模式下显示 -->
       <div v-if="view === 'reader'" class="toolbar">
         <div class="page-navigation">
@@ -34,13 +54,14 @@
     </header>
 
     <main class="main-content">
-      
+
       <!-- 书架视图 -->
       <Bookshelf v-if="view === 'library'" @select="openBook" />
 
       <!-- 阅读器视图：连续滚动模式 -->
-       <!-- Reader 负责决定当前页，App 只接收这个结果并更新工具栏显示 -->
-      <Reader v-if="view === 'reader'"
+      <!-- Reader 负责决定当前页，App 只接收这个结果并更新工具栏显示 -->
+      <Reader
+        v-if="view === 'reader'"
         ref="readerRef"
         :pdfSource="pdfSource"
         @loaded="onPDFLoaded"
@@ -52,23 +73,55 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue';
+import { ref, onMounted } from 'vue';
 
 import Bookshelf from './components/Bookshelf.vue';
 import Reader from './components/Reader.vue';
- 
-import { BookService } from '../bindings/changeme'; //这个路径是正确的，不要修改
+import SettingsMenu from './components/SettingsMenu.vue';
+
+import { BookService, ChatService } from '../bindings/hreader'; //这个路径是正确的，不要修改
 
 // --- 状态定义 ---
 const view = ref('library');
 const currentBookTitle = ref('');
 const pdfSource = ref(null);
+const apiKey = ref('');
+const settingsOpen = ref(false);
 
 const currentPage = ref(1); // 在连续模式下，这个值主要用于显示“当前可视区域大致页码”，实际滚动由浏览器原生处理
 const totalPages = ref(0);
 
 const zoomLevel = ref(1);
 const readerRef = ref(null);
+
+const loadApiKey = async () => {
+  try {
+    apiKey.value = await ChatService.GetAPIKey();
+  } catch (err) {
+    console.error('读取 API Key 失败', err);
+  }
+};
+
+const toggleSettings = async () => {
+  if (!settingsOpen.value) {
+    await loadApiKey();
+  }
+  settingsOpen.value = !settingsOpen.value;
+};
+
+const saveApiKey = async (nextKey) => {
+  try {
+    await ChatService.SaveAPIKey(nextKey);
+    apiKey.value = nextKey;
+    settingsOpen.value = false;
+  } catch (err) {
+    alert('保存 API Key 失败：' + err.message);
+  }
+};
+
+onMounted(() => {
+  loadApiKey();
+});
 
 // --- 阅读器逻辑 ---
 const openBook = async (book) => {
@@ -80,7 +133,7 @@ const openBook = async (book) => {
 
   try {
     const data = await BookService.LoadPDF(book.path);
-    
+
     // Wails v3 byte[] -> Base64 转换
     const byteCharacters = atob(data);
     const byteNumbers = new Array(byteCharacters.length);
@@ -90,12 +143,11 @@ const openBook = async (book) => {
     const byteArray = new Uint8Array(byteNumbers);
     const blob = new Blob([byteArray], { type: 'application/pdf' });
 
-    if (blob.size === 0) throw new Error("Empty PDF");
+    if (blob.size === 0) throw new Error('Empty PDF');
 
     pdfSource.value = URL.createObjectURL(blob);
-
   } catch (err) {
-    alert("无法打开文件：" + err.message);
+    alert('无法打开文件：' + err.message);
     goBack();
   }
 };
@@ -165,18 +217,18 @@ const goToPageInput = (event) => {
   --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
 }
 
-body { 
-  margin: 0; 
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
-  background: var(--bg-color); 
-  color: var(--text-primary); 
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg-color);
+  color: var(--text-primary);
   overflow: hidden; /* 防止整个页面滚动 */
 }
 
-.app-container { 
-  display: flex; 
-  flex-direction: column; 
-  height: 100vh; 
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
   width: 100%;
 }
 
@@ -225,6 +277,16 @@ body {
   border-color: #ccc;
 }
 
+.btn-square {
+  padding: 0;
+}
+
+.settings-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
 .app-title {
   font-size: 18px;
   font-weight: 600;
@@ -242,6 +304,14 @@ body {
   gap: 20px;
   margin-left: 16px;
   flex-shrink: 0;
+}
+
+.library-toolbar {
+  margin-left: auto;
+}
+
+.settings-anchor {
+  position: relative;
 }
 
 .page-navigation {
@@ -338,11 +408,11 @@ body {
 }
 
 /* --- 主内容区 --- */
-.main-content { 
-  flex: 1; 
+.main-content {
+  flex: 1;
   min-height: 0;
   /* overflow: hidden;  */
-  position: relative; 
+  position: relative;
 }
 
 </style>

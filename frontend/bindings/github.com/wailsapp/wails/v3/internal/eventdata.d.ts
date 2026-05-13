@@ -8,6 +8,9 @@ import type { Events } from "@wailsio/runtime";
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "chat_chunk": string;
+            "chat_done": string;
+            "chat_stream_error": string;
             "time": string;
         }
     }

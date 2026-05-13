@@ -14,16 +14,19 @@ var assets embed.FS
 
 func init() {
 	application.RegisterEvent[string]("time")
+	application.RegisterEvent[string]("chat_chunk")
+	application.RegisterEvent[string]("chat_done")
+	application.RegisterEvent[string]("chat_stream_error")
 }
 
 func main() {
-
 	wailApp := application.New(application.Options{
 		Name:        "hreader",
 		Description: "A H File Reader",
 		Services: []application.Service{
 			application.NewService(&GreetService{}),
 			application.NewService(&BookService{}),
+			application.NewService(NewChatService()),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

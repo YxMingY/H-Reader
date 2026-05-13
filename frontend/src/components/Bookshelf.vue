@@ -35,7 +35,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import { BookService } from '../../bindings/changeme';
+import { BookService } from '../../bindings/hreader';
 
 const books = ref([]);
 const loading = ref(false);

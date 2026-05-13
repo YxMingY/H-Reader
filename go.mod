@@ -1,8 +1,11 @@
-module changeme
+module hreader
 
 go 1.25
 
-require github.com/wailsapp/wails/v3 v3.0.0-alpha.74
+require (
+	github.com/sashabaranov/go-openai v1.41.2
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.74
+)
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
