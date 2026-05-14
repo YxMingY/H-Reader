@@ -28,6 +28,9 @@ const pageContainerRefs = {};
 
 const PAGE_GAP = 20;
 const RENDER_THROTTLE = 200;
+const ZOOM_STEP = 1.1;
+const MIN_PAGE_WIDTH = 200;
+const MAX_PAGE_WIDTH = 1200;
 let resizeTimeout = null;
 let renderTimeout = null;
 let scrollTimeout = null;
@@ -193,24 +196,30 @@ const handleWheel = (event) => {
     wheelTimeout = null;
   }, 100);
   
-  // 根据滚轮方向调整缩放比例
-  const zoomStep = 1.1; // 缩放步长
-  const minWidth = 200; // 最小宽度
-  const maxWidth = 1200; // 最大宽度
-  
-  let newWidth = pageWidth.value;
   if (event.deltaY < 0) {
-    // 向上滚动：放大
-    newWidth = Math.min(pageWidth.value * zoomStep, maxWidth);
+    zoomIn();
   } else {
-    // 向下滚动：缩小
-    newWidth = Math.max(pageWidth.value / zoomStep, minWidth);
+    zoomOut();
   }
-  
-  if (newWidth !== pageWidth.value) {
-    pageWidth.value = newWidth;
-    rerenderVisiblePages();
-  }
+};
+
+const setPageWidth = (nextWidth) => {
+  // 所有缩放路径都收敛到这里：先夹紧，再重渲染可见页，最后通知外部当前缩放结果。
+  const clamped = Math.min(Math.max(nextWidth, MIN_PAGE_WIDTH), MAX_PAGE_WIDTH);
+  if (clamped === pageWidth.value) return;
+  pageWidth.value = clamped;
+  rerenderVisiblePages();
+  emit('rescale', clamped);
+};
+
+const zoomIn = () => {
+  // 放大按钮与滚轮向上共用同一套缩放步长。
+  setPageWidth(pageWidth.value * ZOOM_STEP);
+};
+
+const zoomOut = () => {
+  // 缩小按钮与滚轮向下共用同一套缩放步长。
+  setPageWidth(pageWidth.value / ZOOM_STEP);
 };
 
 // 计算页面的 viewport 和 outputScale
@@ -372,12 +381,9 @@ const renderTextLayer = (textContent, viewport, textLayer) => {
 const fitWidth = () => {
   if (!readerContainer.value) return;
   
-  // 这里只改“页面宽度”，高度会跟着每页自己的 viewport 在渲染时重新确定
-  const containerWidth = Math.max(readerContainer.value.clientWidth - 40, 200);
-  pageWidth.value = containerWidth;
-  
-  // 重新渲染所有可见页面
-  rerenderVisiblePages();
+  // fitWidth 只负责把“页面宽度”贴合当前阅读器容器，页面高度仍由每页 viewport 动态计算。
+  const containerWidth = readerContainer.value.clientWidth - 40;
+  setPageWidth(containerWidth);
 };
 
 // 滚动到指定页面
@@ -464,6 +470,9 @@ defineExpose({
   totalPages,
   currentPage,
   renderPage,
+  zoomIn,
+  zoomOut,
+  fitWidth,
   goToPage,
   goToNextPage,
   goToPrevPage,
@@ -512,7 +521,7 @@ defineExpose({
 <style>
 .reader-view {
   height: 100%;
-  width: 100vw;
+  width: 100%;
   box-sizing: border-box;
   overflow-y: auto;
   overflow-x: auto; /* 允许左右滚动缩放后的内容 */

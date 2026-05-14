@@ -17,7 +17,7 @@
               id="api-key-input"
               v-model="draftKey"
               class="settings-input"
-              type="password"
+              type="text"
               spellcheck="false"
               autocomplete="off"
               placeholder="输入后端 API_KEY"
