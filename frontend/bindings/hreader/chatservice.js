@@ -6,6 +6,7 @@
  * ChatService 聊天服务
  * 字段说明：
  * - mu: 互斥锁保护所有字段的并发访问
+ * - config: 应用配置（缓存的单例）
  * - client: LLM API客户端（通过API_KEY初始化）
  * - conversation: 全局会话对象（仅用于非作用域的消息发送）
  * @module
@@ -46,7 +47,8 @@ export function DeleteSession(scopeType, bookPath, sessionID) {
 }
 
 /**
- * GetAPIKey 读取当前配置的API密钥
+ * GetAPIKey 从缓存配置中读取API密钥
+ * 无需重新加载文件，使用单例缓存
  * @returns {$CancellablePromise<string>}
  */
 export function GetAPIKey() {
@@ -99,10 +101,11 @@ export function ResetConversation() {
 /**
  * SaveAPIKey 保存新的API密钥到配置文件
  * 流程：
- *   1. 验证新API_KEY是否有效（创建临时client测试）
- *   2. 保存到配置文件
- *   3. 替换当前client对象
- *   4. 重置conversation（会在下次ensureConversationLocked时重建）
+ *  1. 验证新API_KEY是否有效（创建临时client测试）
+ *  2. 保存到配置文件
+ *  3. 替换当前client对象
+ *  4. 重置conversation（会在下次ensureConversationLocked时重建）
+ * 
  * 如果API_KEY无效，保存失败且不会修改现有client
  * @param {string} apiKey
  * @returns {$CancellablePromise<void>}

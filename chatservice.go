@@ -47,10 +47,12 @@ const (
 // ChatService 聊天服务
 // 字段说明：
 // - mu: 互斥锁保护所有字段的并发访问
+// - config: 应用配置（缓存的单例）
 // - client: LLM API客户端（通过API_KEY初始化）
 // - conversation: 全局会话对象（仅用于非作用域的消息发送）
 type ChatService struct {
 	mu           sync.Mutex
+	config       *Config
 	client       *llmkit.Client
 	conversation *llmkit.TracedConversation
 }
@@ -59,17 +61,18 @@ type ChatService struct {
 // 在启动时尝试加载保存的API_KEY并创建client
 // 如果API_KEY无效或未配置，client保持nil，需要通过SaveAPIKey后续设置
 func NewChatService() *ChatService {
+	config := GetConfig()
 	cs := &ChatService{
+		config:       config,
 		client:       nil,
 		conversation: nil,
 	}
 
-	// 尝试从配置文件加载已保存的API_KEY并初始化client
-	apiKey := cs.GetAPIKey()
-	if strings.TrimSpace(apiKey) != "" {
+	// 尝试使用已保存的API_KEY初始化client
+	if config.API_KEY != "" {
 		if client, err := llmkit.NewClient(llmkit.Config{
 			Provider: defaultProvider,
-			APIKey:   apiKey,
+			APIKey:   config.API_KEY,
 			Model:    defaultModel,
 		}); err == nil {
 			cs.client = client
@@ -366,13 +369,13 @@ func (c *ChatService) SendMessageStreamInSession(scopeType, bookPath, sessionID,
 	return nil
 }
 
-// GetAPIKey 读取当前配置的API密钥
+// GetAPIKey 从缓存配置中读取API密钥
+// 无需重新加载文件，使用单例缓存
 func (c *ChatService) GetAPIKey() string {
-	cfg, err := LoadConfig()
-	if err != nil || cfg == nil {
+	if c.config == nil {
 		return ""
 	}
-	return cfg.API_KEY
+	return c.config.API_KEY
 }
 
 // SaveAPIKey 保存新的API密钥到配置文件
@@ -399,13 +402,9 @@ func (c *ChatService) SaveAPIKey(apiKey string) error {
 		return fmt.Errorf("invalid api key: %w", err)
 	}
 
-	// 保存到配置文件
-	cfg, err := LoadConfig()
-	if err != nil || cfg == nil {
-		cfg = &Config{}
-	}
-	cfg.API_KEY = cleanKey
-	if err := cfg.SaveToFile(); err != nil {
+	// 保存到配置文件（同时更新内存缓存）
+	c.config.API_KEY = cleanKey
+	if err := c.config.SaveToFile(); err != nil {
 		return err
 	}
 
