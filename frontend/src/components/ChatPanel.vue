@@ -1123,6 +1123,36 @@ onBeforeUnmount(() => {
   }
 });
 
+/**
+ * 暴露给父组件的方法
+ * 
+ * 这些方法可以通过 ref 访问，用于外部调用
+ */
+defineExpose({
+  /**
+   * 从 data URL 添加图片到附件列表
+   * @param {string} dataUrl - 图片的 data URL
+   * @returns {Promise<void>}
+   */
+  addAttachmentFromDataUrl: async (dataUrl) => {
+    try {
+      // 将 data URL 转换为 File 对象
+      const response = await fetch(dataUrl);
+      const blob = await response.blob();
+      const fileName = `screenshot-${Date.now()}.png`;
+      const file = new File([blob], fileName, { type: blob.type });
+      
+      // 读取为 data URL 并添加到附件列表
+      const item = await readFileAsDataUrl(file);
+      attachments.value.push(item);
+      console.log('已添加截图到附件列表');
+    } catch (err) {
+      console.error('添加截图失败:', err);
+      errorMessage.value = `添加截图失败：${err?.message || err}`;
+    }
+  },
+});
+
 </script>
 
 <style scoped>

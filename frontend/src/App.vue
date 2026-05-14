@@ -32,6 +32,26 @@
 
         <div v-if="view === 'reader'" class="toolbar reader-toolbar">
           <div class="reader-controls">
+            <!-- 截图功能按钮 -->
+            <div class="screenshot-controls">
+              <button @click="captureCurrentPage" title="截取当前页" class="nav-btn screenshot-btn" aria-label="截取当前页">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+              </button>
+              <button @click="startAreaSelection" title="框选区域截图" class="nav-btn screenshot-btn" aria-label="框选区域截图">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
+                  <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
+                  <path d="M21 17v2a2 2 0 0 1-2 2h-2"></path>
+                  <path d="M7 21H5a2 2 0 0 1-2-2v-2"></path>
+                  <line x1="7" y1="12" x2="17" y2="12"></line>
+                </svg>
+              </button>
+            </div>
+
             <div class="page-navigation">
               <button @click="goToPrevPage" title="上一页" class="nav-btn">←</button>
               <div class="page-display">
@@ -93,6 +113,7 @@
 
       <aside v-show="chatOpen" class="chat-pane">
         <ChatPanel
+          ref="chatPanelRef"
           :scope-type="chatScopeType"
           :book-path="currentBookPath"
           :book-title="currentBookTitle"
@@ -133,6 +154,7 @@ const totalPages = ref(0);
 
 const zoomLevel = ref(1);
 const readerRef = ref(null);
+const chatPanelRef = ref(null);
 const pageInputRef = ref(null);
 
 const getViewportWidth = () => (typeof window !== 'undefined' ? window.innerWidth : 0);
@@ -332,6 +354,96 @@ const goToPageInput = (event) => {
   }
 };
 
+/**
+ * 截取当前页并发送到剪贴板和聊天面板
+ */
+const captureCurrentPage = async () => {
+  try {
+    const imageDataUrl = await readerRef.value?.captureCurrentPage();
+    if (!imageDataUrl) {
+      alert('截图失败');
+      return;
+    }
+
+    // 发送到剪贴板
+    await sendToClipboard(imageDataUrl);
+
+    // 如果聊天面板开着，自动添加到附件列表
+    if (chatOpen.value) {
+      await addImageToChat(imageDataUrl);
+    }
+
+    console.log('当前页截图成功');
+  } catch (err) {
+    console.error('截图失败:', err);
+    alert('截图失败: ' + err.message);
+  }
+};
+
+/**
+ * 开始框选区域截图
+ */
+const startAreaSelection = async () => {
+  try {
+    const imageDataUrl = await readerRef.value?.startAreaSelection();
+    if (!imageDataUrl) {
+      console.log('用户取消了框选');
+      return;
+    }
+
+    // 发送到剪贴板
+    await sendToClipboard(imageDataUrl);
+
+    // 如果聊天面板开着，自动添加到附件列表
+    if (chatOpen.value) {
+      await addImageToChat(imageDataUrl);
+    }
+
+    console.log('框选截图成功');
+  } catch (err) {
+    console.error('框选截图失败:', err);
+    alert('框选截图失败: ' + err.message);
+  }
+};
+
+/**
+ * 将图片数据 URL 发送到剪贴板
+ * @param {string} dataUrl - 图片的 data URL
+ */
+const sendToClipboard = async (dataUrl) => {
+  try {
+    // 将 data URL 转换为 Blob
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+
+    // 创建 ClipboardItem 并写入剪贴板
+    const clipboardItem = new ClipboardItem({ [blob.type]: blob });
+    await navigator.clipboard.write([clipboardItem]);
+    console.log('已复制到剪贴板');
+  } catch (err) {
+    console.error('复制到剪贴板失败:', err);
+    // 某些浏览器可能不支持，静默失败
+  }
+};
+
+/**
+ * 将图片添加到聊天面板的附件列表
+ * @param {string} dataUrl - 图片的 data URL
+ */
+const addImageToChat = async (dataUrl) => {
+  try {
+    // 通过 chatPanelRef 访问 ChatPanel 组件的方法
+    if (chatPanelRef.value && typeof chatPanelRef.value.addAttachmentFromDataUrl === 'function') {
+      await chatPanelRef.value.addAttachmentFromDataUrl(dataUrl);
+      console.log('已添加图片到聊天面板');
+    } else {
+      console.warn('ChatPanel 未暴露 addAttachmentFromDataUrl 方法');
+    }
+  } catch (err) {
+    console.error('添加图片到聊天面板失败:', err);
+  }
+};
+
 </script>
 
 <style>
@@ -484,6 +596,45 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.screenshot-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.screenshot-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: linear-gradient(180deg, #e8f4ff, #d0e8ff);
+  border: 1px solid rgba(0, 122, 204, 0.3);
+  color: #007acc;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.screenshot-btn:hover {
+  background: linear-gradient(180deg, #d0e8ff, #b8dcff);
+  border-color: rgba(0, 122, 204, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 122, 204, 0.2);
+}
+
+.screenshot-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 122, 204, 0.15);
+}
+
+.screenshot-btn svg {
+  display: block;
+  width: 16px;
+  height: 16px;
 }
 
 .zoom-controls {
