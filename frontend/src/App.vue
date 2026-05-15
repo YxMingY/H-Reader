@@ -129,7 +129,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import Bookshelf from './components/Bookshelf.vue';
-import Reader from './components/Reader.vue';
+import Reader from './components/Reader/Reader.vue';
 import ChatPanel from './components/ChatPanel.vue';
 import SettingsMenu from './components/SettingsMenu.vue';
 
@@ -223,7 +223,7 @@ const toggleChatPanel = () => {
 
     if (shouldAutoFitReader) {
       nextTick(() => {
-        readerRef.value?.fitWidth();
+        readerRef.value?.FitWidth();
       });
     }
   }
@@ -311,6 +311,7 @@ const goBack = () => {
 };
 
 const onPDFLoaded = (pdf) => {
+  console.log(pdf.numPages); 
   totalPages.value = pdf.numPages;
 };
 
@@ -327,15 +328,15 @@ const goToPrevPage = () => {
 };
 
 const zoomIn = () => {
-  readerRef.value?.zoomIn();
+  readerRef.value?.ZoomIn();
 };
 
 const zoomOut = () => {
-  readerRef.value?.zoomOut();
+  readerRef.value?.ZoomOut();
 };
 
 const fitWidth = () => {
-  readerRef.value?.fitWidth();
+  readerRef.value?.FitWidth();
 };
 
 const goToPageInput = (event) => {
