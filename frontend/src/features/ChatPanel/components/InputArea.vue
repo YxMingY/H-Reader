@@ -68,7 +68,7 @@
  * - 使用 :value + @input 模式实现 prop 双向绑定
  */
 
-import { defineEmits, ref } from 'vue';
+import { ref } from 'vue';
 
 // ========================================
 // Props 定义

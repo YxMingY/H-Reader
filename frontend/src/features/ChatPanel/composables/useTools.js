@@ -3,14 +3,18 @@
  * 
  * 提供聊天面板所需的工具函数：
  * - Markdown 渲染（支持代码高亮、链接识别、自动换行）
+ * - LaTeX 数学公式渲染（支持 $...$、$$...$$、\(...\)、\[...\] 等多种语法，使用 KaTeX）
  * - 集成 highlight.js 实现语法高亮
  * 
  * @returns {Object} 工具函数集合
  */
 
 import MarkdownIt from 'markdown-it';
+import texmath from 'markdown-it-texmath';
+import katex from 'katex';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
+import 'katex/dist/katex.min.css';
 
 export function useTools() {
   // ========================================
@@ -25,6 +29,11 @@ export function useTools() {
    * - linkify: true - 自动识别并转换 URL 为可点击链接
    * - typographer: true - 启用排版优化（如引号转换）
    * - highlight - 自定义代码高亮函数
+   * 
+   * 插件：
+   * - markdown-it-texmath - 支持 LaTeX 数学公式渲染（基于 KaTeX）
+   *   - 行内公式：$...$ 或 \(...\)
+   *   - 块级公式：$$...$$ 或 \[...\]
    * 
    * 高亮策略：
    * 1. 优先使用指定的语言进行高亮
@@ -56,6 +65,34 @@ export function useTools() {
     },
   });
 
+  // 启用 texmath 插件以支持 LaTeX 数学公式
+  // 配置说明：
+  // - engine: katex - 使用 KaTeX 作为渲染引擎
+  // - delimiters: 支持的分隔符类型
+  //   - 'dollars': $...$ (行内) 和 $$...$$ (块级)
+  //   - 'brackets': \(...\) (行内) 和 \[...\] (块级)
+  //   - 'doxygen': \f$...\f$ (行内), \f(...\f) (行内), \f[...\f] (块级)
+  //   - 可以使用数组组合多种类型，如 ['dollars', 'brackets']
+  // - throwOnError: false - 渲染错误时不抛出异常，而是显示原始文本（适合流式输出）
+  // - errorColor: '#cc0000' - 错误文本的颜色
+  // - katexOptions: KaTeX 渲染选项
+  //   - macros: {} - 自定义宏定义
+  //   - strict: false - 允许非标准语法
+  // 
+  // 流式输出适配：
+  // - throwOnError: false 确保不完整的公式不会导致渲染失败
+  // - 未闭合的公式符号会被当作普通文本处理，等后续内容到达后重新渲染
+  markdownRenderer.use(texmath, {
+    engine: katex,
+    delimiters: ['dollars', 'brackets'], // 同时支持 $...$ 和 \(...\) 两种语法
+    throwOnError: false,
+    errorColor: '#cc0000',
+    katexOptions: {
+      macros: {},
+      strict: false, // 允许更宽松的语法解析
+    },
+  });
+
   /**
    * 渲染 Markdown 内容为 HTML
    * 
@@ -66,7 +103,22 @@ export function useTools() {
    * const html = renderMarkdown('# Hello\n**World**');
    * // 返回: "<h1>Hello</h1><p><strong>World</strong></p>"
    */
-  const renderMarkdown = (content) => markdownRenderer.render(String(content || ''));
+  const renderMarkdown = (content) => {
+    const text = String(content || '');
+    
+    // 预处理：移除公式分隔符 $ 前后的空格（但不影响文本中的其他空格）
+    // 例如："$ x^2 $" -> "$x^2$"
+    // 匹配模式：$ 后跟空格 或 空格后跟 $
+    const normalizedText = text
+      .replace(/\$\s+/g, '$')   // 移除 $ 后面的空格
+      .replace(/\s+\$/g, '$')   // 移除 $ 前面的空格
+      .replace(/\\\(\s+/g, '\\(') // 移除 \( 后面的空格
+      .replace(/\s+\\\)/g, '\\)') // 移除 \) 前面的空格
+      .replace(/\\\[\s+/g, '\\[') // 移除 \[ 后面的空格
+      .replace(/\s+\\\]/g, '\\]'); // 移除 \] 前面的空格
+    
+    return markdownRenderer.render(normalizedText);
+  };
 
   return {
     renderMarkdown,

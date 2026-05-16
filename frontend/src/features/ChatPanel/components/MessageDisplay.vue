@@ -23,11 +23,11 @@
         class="chat-message"
         :class="message.role"
       >
-        <!-- AI 助手消息：使用 Markdown 渲染 -->
+        <!-- AI 助手消息：使用 Markdown 渲染（带防抖） -->
         <div
           v-if="message.role === 'assistant'"
           class="chat-message-content markdown-body"
-          v-html="renderMarkdown(message.content)"
+          v-html="getRenderedHtml(index)"
         ></div>
         <!-- 用户消息：纯文本显示 -->
         <div v-else class="chat-message-content">{{ message.content }}</div>
@@ -45,9 +45,10 @@
  * - 用户消息右对齐，AI 消息左对齐
  * - AI 消息支持 Markdown 渲染（代码块、列表、引用等）
  * - 暴露 messageViewportRef 供父组件控制滚动
+ * - 使用防抖优化流式输出的公式渲染
  */
 
-import { ref } from 'vue';
+import { ref, watch, onBeforeUnmount } from 'vue';
 
 // ========================================
 // Props 定义
@@ -81,6 +82,86 @@ const props = defineProps({
  */
 const messageViewportRef = ref(null);
 
+/**
+ * 渲染后的 HTML 缓存
+ * 键：消息索引，值：渲染后的 HTML 字符串
+ */
+const renderedHtml = ref({});
+
+/**
+ * 标记正在流式输出的消息索引集合
+ * 用于跟踪哪些消息还在接收新内容
+ */
+const streamingMessages = ref(new Set());
+
+/**
+ * 立即渲染消息内容
+ * 
+ * @param {Object} message - 消息对象
+ * @param {number} index - 消息索引
+ */
+const renderMessage = (message, index) => {
+  // 用户消息不需要 Markdown 渲染
+  if (message.role !== 'assistant') {
+    renderedHtml.value[index] = message.content;
+    return;
+  }
+
+  // 直接渲染，不做防抖
+  renderedHtml.value[index] = props.renderMarkdown(message.content);
+};
+
+/**
+ * 监听消息列表变化
+ * - 检测新增消息或内容更新
+ * - 标记流式输出状态
+ * - 在输出结束后重新渲染以确保公式完整
+ */
+watch(
+  () => props.messages,
+  (newMessages, oldMessages) => {
+    newMessages.forEach((message, index) => {
+      const oldMessage = oldMessages?.[index];
+      
+      // 检测是否是流式输出（内容在变化）
+      if (oldMessage && message.content !== oldMessage.content) {
+        // 标记为正在流式输出
+        streamingMessages.value.add(index);
+        
+        // 立即渲染（保持实时性）
+        renderMessage(message, index);
+      } else if (!oldMessage || message.content !== renderedHtml.value[index]) {
+        // 新消息或内容未同步，立即渲染
+        renderMessage(message, index);
+        
+        // 如果不是流式输出，清除标记
+        if (!streamingMessages.value.has(index)) {
+          // 延迟一小段时间后检查是否需要重新渲染
+          setTimeout(() => {
+            // 如果内容没有继续变化，说明输出已结束
+            if (props.messages[index]?.content === message.content) {
+              streamingMessages.value.delete(index);
+              // 重新渲染一次，确保公式完整
+              renderMessage(props.messages[index], index);
+            }
+          }, 300);
+        }
+      }
+    });
+  },
+  { deep: true, immediate: true }
+);
+
+/**
+ * 获取消息的渲染结果
+ * 
+ * @param {number} index - 消息索引
+ * @returns {string} 渲染后的 HTML
+ */
+const getRenderedHtml = (index) => {
+  return renderedHtml.value[index] || '';
+};
+
 // ========================================
 // 公开 API
 // ========================================
@@ -88,6 +169,19 @@ const messageViewportRef = ref(null);
 defineExpose({
   /** 消息滚动容器 DOM 引用 */
   messageViewportRef
+});
+
+// ========================================
+// 生命周期钩子
+// ========================================
+
+/**
+ * 组件卸载时清理状态
+ */
+onBeforeUnmount(() => {
+  // 清空缓存和状态
+  renderedHtml.value = {};
+  streamingMessages.value.clear();
 });
 </script>
 
@@ -236,6 +330,22 @@ defineExpose({
   border: none;
   border-top: 1px solid rgba(0, 0, 0, 0.1);
   margin: 0.9em 0;
+}
+
+/* ========================================
+   数学公式样式（KaTeX）
+   ======================================== */
+
+.chat-message-content.markdown-body :deep(.katex) {
+  font-size: 1.1em;
+  line-height: 1.2;
+}
+
+.chat-message-content.markdown-body :deep(.katex-display) {
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
 }
 
 .chat-empty {
