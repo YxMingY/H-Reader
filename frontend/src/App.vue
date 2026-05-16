@@ -130,7 +130,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import Bookshelf from './features/Bookshelf/Bookshelf.vue';
 import Reader from './features/Reader/Reader.vue';
-import ChatPanel from './features/ChatPanel.vue';
+import ChatPanel from './features/ChatPanel/ChatPanel.vue';
 import SettingsMenu from './features/SettingsMenu.vue';
 
 import { BookService, ChatService } from '../bindings/hreader'; //这个路径是正确的，不要修改
