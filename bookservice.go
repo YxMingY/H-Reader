@@ -21,12 +21,18 @@ type BookInfo struct {
 }
 
 func (a *BookService) GetScanDir() string {
-	home, _ := os.UserHomeDir()
-	defaultDir := filepath.Join(home, "Documents", "Papers")
+	// 优先从 Config 中读取默认文件夹
+	cfg := GetConfig()
+	if cfg.DefaultFolder != "" {
+		return cfg.DefaultFolder
+	}
+
+	// 如果 Config 中没有设置，返回空字符串（触发引导界面）
+	// 不再使用默认路径，确保用户必须主动选择文件夹
 	if a.scanDir != "" {
 		return a.scanDir
 	}
-	return defaultDir
+	return ""
 }
 
 func (a *BookService) ChooseDir() (string, error) {
@@ -39,6 +45,15 @@ func (a *BookService) ChooseDir() (string, error) {
 		return "", err
 	}
 	a.scanDir = path
+
+	// 将选择的文件夹保存到 Config
+	cfg := GetConfig()
+	cfg.DefaultFolder = path
+	if err := cfg.SaveToFile(); err != nil {
+		// 保存失败不影响选择结果，只记录错误
+		println("保存默认文件夹失败:", err.Error())
+	}
+
 	return path, nil
 }
 

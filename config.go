@@ -29,7 +29,8 @@
 // 配置格式：
 //
 //	{
-//	  "api_key": "sk-xxxxx"
+//	  "api_key": "sk-xxxxx",
+//	  "default_folder": "C:/Users/xxx/Documents/Papers"
 //	}
 package main
 
@@ -41,7 +42,8 @@ import (
 
 // Config 应用配置结构体
 type Config struct {
-	API_KEY string `json:"api_key"` // LLM服务API密钥
+	API_KEY       string `json:"api_key"`        // LLM服务API密钥
+	DefaultFolder string `json:"default_folder"` // 默认PDF书籍文件夹路径
 }
 
 var (

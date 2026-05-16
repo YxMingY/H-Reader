@@ -92,7 +92,13 @@
 
     <div class="workspace-shell" :style="workspaceStyle" :class="{ 'chat-open': chatOpen }">
       <main class="main-content content-pane">
-        <Bookshelf v-if="view === 'library'" @select="openBook" />
+        <Bookshelf 
+          v-if="view === 'library'" 
+          ref="bookshelfRef"
+          :has-api-key="!!apiKey"
+          @select="openBook" 
+          @settings-opened="toggleSettings"
+        />
 
         <Reader
           v-if="view === 'reader'"
@@ -149,6 +155,9 @@ const isResizingChat = ref(false);
 const resizeStartX = ref(0);
 const resizeStartWidth = ref(420);
 
+// Bookshelf 组件引用
+const bookshelfRef = ref(null);
+
 const currentPage = ref(1); // 在连续模式下，这个值主要用于显示“当前可视区域大致页码”，实际滚动由浏览器原生处理
 const totalPages = ref(0);
 
@@ -192,8 +201,10 @@ const chatScopeKey = computed(() => (view.value === 'reader' ? currentBookPath.v
 const loadApiKey = async () => {
   try {
     apiKey.value = await ChatService.GetAPIKey();
+    return apiKey.value;
   } catch (err) {
     console.error('读取 API Key 失败', err);
+    return '';
   }
 };
 
@@ -234,6 +245,11 @@ const saveApiKey = async (nextKey) => {
     await ChatService.SaveAPIKey(nextKey);
     apiKey.value = nextKey;
     settingsOpen.value = false;
+    
+    // API Key 保存后，检查是否需要显示/隐藏引导界面
+    if (bookshelfRef.value) {
+      bookshelfRef.value.checkOnboarding(nextKey);
+    }
   } catch (err) {
     alert('保存 API Key 失败：' + err.message);
   }
@@ -265,7 +281,15 @@ const stopChatResize = () => {
 };
 
 onMounted(() => {
-  loadApiKey();
+  loadApiKey().then(() => {
+    // API Key 加载完成后，检查是否需要显示引导界面
+    // 使用 nextTick 确保 bookshelfRef 已经挂载
+    nextTick(() => {
+      if (bookshelfRef.value) {
+        bookshelfRef.value.checkOnboarding(apiKey.value);
+      }
+    });
+  });
   window.addEventListener('resize', syncChatWidth);
 });
 
