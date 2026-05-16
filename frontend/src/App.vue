@@ -128,10 +128,10 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
-import Bookshelf from './components/Bookshelf.vue';
-import Reader from './components/Reader/Reader.vue';
-import ChatPanel from './components/ChatPanel.vue';
-import SettingsMenu from './components/SettingsMenu.vue';
+import Bookshelf from './features/Bookshelf/Bookshelf.vue';
+import Reader from './features/Reader/Reader.vue';
+import ChatPanel from './features/ChatPanel.vue';
+import SettingsMenu from './features/SettingsMenu.vue';
 
 import { BookService, ChatService } from '../bindings/hreader'; //这个路径是正确的，不要修改
 
@@ -320,11 +320,11 @@ const onPDFRescale = (newScale) => {
 };
 
 const goToNextPage = () => {
-  readerRef.value?.goToNextPage();
+  readerRef.value?.GoToNextPage();
 };
 
 const goToPrevPage = () => {
-  readerRef.value?.goToPrevPage();
+  readerRef.value?.GoToPrevPage();
 };
 
 const zoomIn = () => {

@@ -15,71 +15,38 @@
       <p class="hint">在{{ scanDir }} 文件夹找不到PDF文件喵>_< </p>
     </div>
 
-    <div class="book-grid" v-else>
-      <div 
-        v-for="book in books" 
-        :key="book.id" 
-        class="book-card"
-        @dblclick="selectBook(book)"
-      >
-        <div class="book-cover">
-          <div class="icon">📄</div>
-        </div>
-        <div class="book-meta">
-          <div class="title" :title="book.title">{{ book.title }}</div>
-        </div>
-      </div>
-    </div>
+    <!-- 使用 BookGrid 组件展示图书列表 -->
+    <BookGrid v-else :books="books" @select="selectBook" />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import { BookService } from '../../bindings/hreader';
+/**
+ * Bookshelf.vue - 图书书架组件
+ * 
+ * 展示 PDF 图书列表，支持：
+ * - 选择扫描目录
+ * - 显示图书卡片
+ * - 双击打开图书
+ */
+import { useLibrary } from './composables';
+import { BookGrid } from './components';
 
-const books = ref([]);
-const loading = ref(false);
-const scanDir = ref("");
+// 使用图书库管理 composable
+const { books, loading, scanDir, chooseDir } = useLibrary();
 
 const emit = defineEmits(['select']);
 
-onMounted(async () => {
-  scanDir.value = await BookService.GetScanDir();
-  console.log("扫描目录:", scanDir.value);
-  await loadLibrary();
-});
-
-const chooseDir = async () => {
-  try {
-    scanDir.value = await BookService.ChooseDir();
-    if (scanDir.value) {
-      console.log("选择的文件夹:", scanDir.value);
-      await loadLibrary(scanDir.value);
-    }
-  } catch (err) {
-    console.error("选择文件夹失败", err);
-  }
-};
-
-const loadLibrary = async (dir) => {
-  loading.value = true;
-  try {
-    const result = await BookService.ScanBooks(dir);
-    books.value = result;
-    console.log("扫描结果:", books.value);
-  } catch (err) {
-    console.error("扫描失败", err);
-  } finally {
-    loading.value = false;
-  }
-};
-
+/**
+ * 选择图书并触发事件
+ * @param {Object} book - 选中的图书记录
+ */
 const selectBook = (book) => {
   emit('select', book);
 };
 
 defineExpose({
-  chooseDir
+  chooseDir  // 暴露选择目录方法供外部调用
 });
 </script>
 
@@ -150,58 +117,9 @@ defineExpose({
   transform: translateY(0);
 }
 
-.book-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 25px;
-}
-
-.book-card {
-  background: white;
-  border-radius: 12px;
-  padding: 15px;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  border: 1px solid transparent;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  box-shadow: var(--shadow-sm);
-}
-
-.book-card:hover {
-  transform: translateY(-5px);
-  box-shadow: var(--shadow-md);
-  border-color: var(--accent-color);
-}
-
-.book-cover {
-  width: 80px;
-  height: 100px;
-  background: #f0f2f5;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 15px;
-  font-size: 32px;
-}
-
-.book-meta {
-  text-align: center;
-  width: 100%;
-}
-
-.title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-  word-break: break-all;
-  display: -webkit-box;
-  line-clamp: 2;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.hint { 
+  font-size: 12px; 
+  opacity: 0.7; 
 }
 
 .empty-msg {
@@ -214,11 +132,6 @@ defineExpose({
   font-size: 48px; 
   margin-bottom: 10px; 
   opacity: 0.5; 
-}
-
-.hint { 
-  font-size: 12px; 
-  opacity: 0.7; 
 }
 
 .loading-state {

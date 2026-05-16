@@ -1,27 +1,39 @@
 import { ref,onMounted, onBeforeUnmount, reactive } from "vue";
 
-
-// PDF 页面管理 以及 渲染相关
+/**
+ * usePdfPages - PDF 页面管理与渲染 Composable
+ * 
+ * 负责管理 PDF 页面的生命周期、渲染和性能优化，包括：
+ * - 页面 DOM 引用管理
+ * - 懒加载和交叉观察器
+ * - Canvas 渲染和文本层生成
+ * - 高分辨率屏幕适配
+ */
 export function usePdfPages(
-    pdfDoc,
-    totalPages,
-    readerContainer,
-    pdfCanvas,
+    pdfDoc,           // PDF 文档对象
+    totalPages,       // 总页数
+    readerContainer,  // 阅读器容器元素
+    pdfCanvas,        // PDF 画布容器元素
 ) {
-    const pageCanvasRefs = {};
-    const pageTextLayerRefs = {};
-    const pageContainerRefs = {};
+    const pageCanvasRefs = {};      // 页面 Canvas 引用集合
+    const pageTextLayerRefs = {};   // 页面文本层引用集合
+    const pageContainerRefs = {};   // 页面容器引用集合
 
-    const renderingPages = ref(new Set()); // 正在渲染的页码，避免重复渲染
-    const currentPages = ref(new Set()); // 当前可见的页码
+    const renderingPages = ref(new Set()); // 正在渲染的页码集合，避免重复渲染
+    const currentPages = ref(new Set());   // 当前可见的页码集合
 
     const pageWidth = ref(600); // 统一管理页面宽度，所有缩放路径都通过修改它来触发重新渲染
 
-    let pageObserver = null;
-    let renderTimeout = null;
+    let pageObserver = null;    // 交叉观察器实例
+    let renderTimeout = null;   // 渲染节流定时器
 
-    const RENDER_THROTTLE = 200;
+    const RENDER_THROTTLE = 200; // 渲染节流时间（毫秒）
 
+    /**
+     * 注册页面 DOM 引用
+     * @param {number} pageNum - 页码
+     * @param {Object|null} els - DOM 元素对象或 null（用于清除）
+     */
     function RegisterPageRefs(pageNum, els) {
         if (els) {
             pageContainerRefs[pageNum] = els.container;
@@ -29,12 +41,16 @@ export function usePdfPages(
             pageTextLayerRefs[pageNum] = els.textLayer;
             
         } else {
+            // 清除引用
             delete pageContainerRefs[pageNum];
             delete pageCanvasRefs[pageNum];
             delete pageTextLayerRefs[pageNum];
         }
     }
 
+    /**
+     * 清除所有页面数据和引用
+     */
     const ClearPages = async () => { 
         console.log('Clearing pages...');
         currentPages.value.clear();
@@ -46,7 +62,11 @@ export function usePdfPages(
         Object.keys(pageContainerRefs).forEach(key => delete pageContainerRefs[key]);
     };
 
-    // 计算页面的 viewport 和 outputScale
+    /**
+     * 计算页面的 viewport 和 outputScale
+     * @param {Object} page - PDF 页面对象
+     * @returns {Object} 包含 viewport 和 outputScale 的对象
+     */
     const computePageViewport = (page) => {
         const pageWidthInPoints = page.view[2] - page.view[0];  // PDF 页面宽度（单位：点, 也就是1/72英寸）
         const scale = pageWidth.value / pageWidthInPoints; // 每个点对应的像素数，pageWidth是我们设定的页面宽度（单位：像素）
@@ -60,14 +80,16 @@ export function usePdfPages(
         return { viewport, outputScale };
     };
 
-    // 使用第1页的高度为所有页面容器预先设置高度，避免首屏滚动条先“跳一下”再稳定
+    /**
+     * 使用第1页的高度为所有页面容器预先设置高度，避免首屏滚动条先"跳一下"再稳定
+     */
     const InitPageHeights = async () => { 
         if (!pdfDoc.value || totalPages.value === 0) return;
-
+    
         try {
             const firstPage = await pdfDoc.value.getPage(1);
             const { viewport } = computePageViewport(firstPage);
-
+    
             // 用 Vue refs 遍历所有页面容器，而不是 querySelectorAll
             for (let i = 1; i <= totalPages.value; i++) {
             const container = pageContainerRefs[i];
@@ -84,8 +106,12 @@ export function usePdfPages(
     };
 
     
-    // 渲染单一页面：先算尺寸，再画 canvas，最后再补文本层
+    /**
+     * 渲染单一页面：先算尺寸，再画 canvas，最后再补文本层
+     * @param {number} pageNum - 要渲染的页码
+     */
     const RenderPage = async (pageNum) => {
+        // 检查是否正在渲染或 PDF 文档是否存在
         if (renderingPages.value.has(pageNum) || !pdfDoc.value) {
             console.warn('RenderPage: pageNum is rendering or pdfDoc is null');
             return;
@@ -96,6 +122,7 @@ export function usePdfPages(
         renderingPages.value.add(pageNum);
         
         try {
+            // 获取 PDF 页面对象
             const page = await pdfDoc.value.getPage(pageNum);
             const canvas = pageCanvasRefs[pageNum];
             const textLayer = pageTextLayerRefs[pageNum];
@@ -105,6 +132,7 @@ export function usePdfPages(
                 return;
             }
 
+            // 计算页面视口和输出缩放比例
             const { viewport, outputScale } = computePageViewport(page);
             console.log(viewport);
             // canvas.width和canvas.height是画布的实际像素尺寸，canvas.style.width和canvas.style.height是画布在页面上的显示尺寸
@@ -128,6 +156,7 @@ export function usePdfPages(
             }; 
 
             console.log('开始渲染页面内容');
+            // 执行页面渲染并等待完成
             await page.render(renderContext).promise;
 
             // 渲染完成后再回写容器高度，防止页面之间重叠
@@ -149,6 +178,7 @@ export function usePdfPages(
         } catch (err) {
             console.error(`渲染第 ${pageNum} 页失败:`, err);
         } finally {
+            // 从正在渲染集合中移除该页面
             renderingPages.value.delete(pageNum);
         }
     };
