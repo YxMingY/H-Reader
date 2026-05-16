@@ -1,20 +1,43 @@
+/**
+ * useSession - 会话管理 Composable
+ * 
+ * 职责：
+ * - 管理会话列表（获取、刷新）
+ * - 管理会话详情（加载消息、创建、删除）
+ * - 维护活跃会话状态
+ * - 处理会话切换和清理
+ * 
+ * @param {Object} props - 组件 props（scopeType, bookPath, bookKey）
+ * @param {ComputedRef<string>} scopeTitle - 作用域标题
+ * @param {ComputedRef<string>} scopeBookPath - 作用域书籍路径
+ * @param {Ref<string>} errorMessage - 错误消息引用
+ * @param {Function} scrollToBottom - 滚动到底部函数
+ * @param {Function} clearInput - 清空输入函数
+ * @returns {Object} 会话管理相关的状态和方法
+ */
+
 import { ref, watch } from 'vue';
-import { ChatService } from '../../../../bindings/hreader'; 
+import { ChatService } from '../../../../bindings/hreader';
 
-export function useSession(
-    props, scopeTitle, scopeBookPath, errorMessage, scrollToBottom, clearInput
-) {
+export function useSession(props, scopeTitle, scopeBookPath, errorMessage, scrollToBottom, clearInput) {
+  // ========================================
+  // 响应式状态
+  // ========================================
 
-// 会话列表：存储当前作用域下的所有会话摘要
-const sessions = ref([]);
-// 当前活跃的会话 ID：空字符串表示在会话列表页
-const activeSessionId = ref('');
-// 当前会话的消息列表：按时间顺序排列
-const messages = ref([]);
-// 加载会话列表的状态标志
-const loadingSessions = ref(false);
-// 加载会话详情的状态标志
-const loadingMessages = ref(false);
+  /** 会话列表：存储当前作用域下的所有会话摘要 */
+  const sessions = ref([]);
+  
+  /** 当前活跃的会话 ID：空字符串表示在会话列表页 */
+  const activeSessionId = ref('');
+  
+  /** 当前会话的消息列表：按时间顺序排列 */
+  const messages = ref([]);
+  
+  /** 加载会话列表的状态标志 */
+  const loadingSessions = ref(false);
+  
+  /** 加载会话详情的状态标志 */
+  const loadingMessages = ref(false);
 
 /**
  * 规范化会话列表结果

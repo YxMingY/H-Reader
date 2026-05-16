@@ -1,17 +1,45 @@
+/**
+ * useChatStream - 流式响应管理 Composable
+ * 
+ * 职责：
+ * - 监听后端推送的流式消息事件（chat_chunk, chat_done, chat_error）
+ * - 实时更新 assistant 消息内容
+ * - 处理流式响应的生命周期（开始、进行中、完成、错误）
+ * - 管理事件订阅和清理
+ * 
+ * 工作流程：
+ * 1. 用户发送消息 → 创建占位消息 → 调用后端 API
+ * 2. 后端通过事件推送分片数据（chat_chunk）
+ * 3. 前端逐块更新 assistant 消息内容
+ * 4. 后端完成后发送 chat_done 事件
+ * 5. 前端刷新会话数据，确保与后端同步
+ * 
+ * @param {Ref<string>} activeSessionId - 活跃会话 ID
+ * @param {Ref<boolean>} sending - 发送状态
+ * @param {Ref<Array>} messages - 消息列表
+ * @param {Ref<string>} errorMessage - 错误消息
+ * @param {Function} loadSession - 加载会话函数
+ * @param {Function} refreshSessions - 刷新会话列表函数
+ * @param {Function} scrollToBottom - 滚动到底部函数
+ * @returns {Object} 流式响应相关的状态和方法
+ */
+
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { Events } from '@wailsio/runtime';
 
-export function useChatStream(
-    activeSessionId, sending, messages, errorMessage, loadSession, refreshSessions, scrollToBottom
-) {
+export function useChatStream(activeSessionId, sending, messages, errorMessage, loadSession, refreshSessions, scrollToBottom) {
+  // ========================================
+  // 响应式状态
+  // ========================================
 
-// 当前流式响应的会话 ID：用于验证事件来源
-const streamSessionId = ref('');
-// 当前流式响应的 assistant 消息索引：用于追加内容
-const streamAssistantIndex = ref(-1);
+  /** 当前流式响应的会话 ID：用于验证事件来源 */
+  const streamSessionId = ref('');
+  
+  /** 当前流式响应的 assistant 消息索引：用于追加内容 */
+  const streamAssistantIndex = ref(-1);
 
-// 事件取消订阅函数列表：用于组件卸载时清理
-const eventUnsubscribers = [];
+  /** 事件取消订阅函数列表：用于组件卸载时清理 */
+  const eventUnsubscribers = [];
 
 /**
  * ========================================

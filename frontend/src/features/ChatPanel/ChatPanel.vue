@@ -73,11 +73,9 @@
         :attachments="attachments"
         :sending="sending"
         :error-message="errorMessage"
-        :file-input-ref="fileInputRef"
         :clear-error-on-input="clearErrorOnInput"
         :handle-paste="handlePaste"
         :remove-attachment="removeAttachment"
-        :pick-images="pickImages"
         :handle-file-input="handleFileInput"
         @send-message="sendMessage"
       />
@@ -229,7 +227,6 @@ const {
   attachments,
   fileInputRef,
   clearInput,
-  pickImages,
   handleFileInput,
   addAttachmentFromDataUrl,
   handlePaste,

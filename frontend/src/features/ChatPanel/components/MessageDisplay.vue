@@ -47,7 +47,7 @@
  * - 暴露 messageViewportRef 供父组件控制滚动
  */
 
-import { defineProps, ref } from 'vue';
+import { ref } from 'vue';
 
 // ========================================
 // Props 定义

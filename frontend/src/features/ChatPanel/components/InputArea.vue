@@ -37,7 +37,7 @@
     <div class="composer-actions">
       <!-- 隐藏的文件选择器 -->
       <input
-        ref="fileInputRef"
+        ref="localFileInputRef"
         class="file-input"
         type="file"
         accept="image/*"
@@ -45,7 +45,7 @@
         @change="handleFileInput"
       />
       <!-- 触发文件选择器 -->
-      <button class="chat-header-btn" type="button" @click="pickImages">添加图片</button>
+      <button class="chat-header-btn" type="button" @click="handlePickImages">添加图片</button>
       <!-- 发送按钮：发送中时禁用 -->
       <button class="chat-header-btn primary" type="button" @click="sendMessage" :disabled="sending">
         {{ sending ? '发送中…' : '发送' }}
@@ -68,7 +68,7 @@
  * - 使用 :value + @input 模式实现 prop 双向绑定
  */
 
-import { defineProps, defineEmits } from 'vue';
+import { defineEmits, ref } from 'vue';
 
 // ========================================
 // Props 定义
@@ -95,11 +95,6 @@ const props = defineProps({
     type: String,
     default: ''
   },
-  /** 文件选择器 DOM 引用 */
-  fileInputRef: {
-    type: Object,
-    default: null
-  },
   /** 输入时清除错误的回调函数 */
   clearErrorOnInput: {
     type: Function,
@@ -115,17 +110,19 @@ const props = defineProps({
     type: Function,
     required: true
   },
-  /** 选择图片的回调函数 */
-  pickImages: {
-    type: Function,
-    required: true
-  },
   /** 处理文件选择的回调函数 */
   handleFileInput: {
     type: Function,
     required: true
   }
 });
+
+// ========================================
+// 本地响应式状态
+// ========================================
+
+/** 本地文件选择器 ref（用于模板绑定） */
+const localFileInputRef = ref(null);
 
 // ========================================
 // 事件定义
@@ -141,6 +138,16 @@ const emit = defineEmits([
 // ========================================
 // 事件处理函数
 // ========================================
+
+/**
+ * 处理点击“添加图片”按钮
+ * 使用本地 ref 触发文件选择器
+ */
+const handlePickImages = () => {
+  console.log('InputArea: 触发文件选择器');
+  console.log('localFileInputRef.value:', localFileInputRef.value);
+  localFileInputRef.value?.click();
+};
 
 /**
  * 发送消息
