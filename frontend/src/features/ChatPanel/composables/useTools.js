@@ -106,18 +106,40 @@ export function useTools() {
   const renderMarkdown = (content) => {
     const text = String(content || '');
     
-    // 预处理：移除公式分隔符 $ 前后的空格（但不影响文本中的其他空格）
-    // 例如："$ x^2 $" -> "$x^2$"
-    // 匹配模式：$ 后跟空格 或 空格后跟 $
-    const normalizedText = text
-      .replace(/\$\s+/g, '$')   // 移除 $ 后面的空格
-      .replace(/\s+\$/g, '$')   // 移除 $ 前面的空格
-      .replace(/\\\(\s+/g, '\\(') // 移除 \( 后面的空格
-      .replace(/\s+\\\)/g, '\\)') // 移除 \) 前面的空格
-      .replace(/\\\[\s+/g, '\\[') // 移除 \[ 后面的空格
-      .replace(/\s+\\\]/g, '\\]'); // 移除 \] 前面的空格
+    // 步骤 1：保护代码块和行内代码中的内容
+    // 使用占位符替换代码，避免公式预处理误伤
+    const codeBlocks = [];
+    const inlineCodes = [];
     
-    return markdownRenderer.render(normalizedText);
+    // 保护多行代码块 ```...```
+    let processedText = text.replace(/```[\s\S]*?```/g, (match) => {
+      codeBlocks.push(match);
+      return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+    });
+    
+    // 保护行内代码 `...`
+    processedText = processedText.replace(/`[^`]+`/g, (match) => {
+      inlineCodes.push(match);
+      return `__INLINE_CODE_${inlineCodes.length - 1}__`;
+    });
+    
+    // 步骤 2：预处理公式（此时代码已被保护，不会被误伤）
+    processedText = processedText.replace(/\$\s*([^\n$]+?)\s*\$/g, (_, formula) => {
+      const trimmedFormula = formula.trim();
+      return `$${trimmedFormula}$`;
+    });
+    
+    // 步骤 3：恢复代码块
+    processedText = processedText.replace(/__CODE_BLOCK_(\d+)__/g, (_, index) => {
+      return codeBlocks[parseInt(index)];
+    });
+    
+    // 步骤 4：恢复行内代码
+    processedText = processedText.replace(/__INLINE_CODE_(\d+)__/g, (_, index) => {
+      return inlineCodes[parseInt(index)];
+    });
+    
+    return markdownRenderer.render(processedText);
   };
 
   return {

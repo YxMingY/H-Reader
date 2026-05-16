@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>列表公式测试</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .test-case {
+      margin: 20px 0;
+      padding: 15px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      background: #f9f9f9;
+    }
+    .test-case h3 {
+      margin-top: 0;
+      color: #333;
+    }
+    .input {
+      background: #fff;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 13px;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .output {
+      background: #fff;
+      padding: 10px;
+      border-radius: 4px;
+      border-left: 3px solid #007acc;
+    }
+  </style>
+</head>
+<body>
+  <h1>列表中公式渲染测试</h1>
+  
+  <div id="test-cases"></div>
+
+  <script type="module">
+    import MarkdownIt from 'https://cdn.jsdelivr.net/npm/markdown-it@14.0.0/+esm';
+    import texmath from 'https://cdn.jsdelivr.net/npm/markdown-it-texmath@1.0.0/+esm';
+    import katex from 'https://cdn.jsdelivr.net/npm/katex@0.16.9/+esm';
+
+    const md = new MarkdownIt({
+      breaks: true,
+      linkify: true,
+    });
+
+    md.use(texmath, {
+      engine: katex,
+      delimiters: ['dollars', 'brackets'],
+      throwOnError: false,
+      errorColor: '#cc0000',
+    });
+
+    // 预处理函数：移除行内公式分隔符 $ 与内容之间的空格
+    const preprocessFormulas = (text) => {
+      // 步骤 1：保护代码块和行内代码
+      const codeBlocks = [];
+      const inlineCodes = [];
+      
+      let processedText = text.replace(/```[\s\S]*?```/g, (match) => {
+        codeBlocks.push(match);
+        return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+      });
+      
+      processedText = processedText.replace(/`[^`]+`/g, (match) => {
+        inlineCodes.push(match);
+        return `__INLINE_CODE_${inlineCodes.length - 1}__`;
+      });
+      
+      // 步骤 2：处理公式
+      processedText = processedText.replace(/\$\s*([^\n$]+?)\s*\$/g, (_, formula) => {
+        const trimmedFormula = formula.trim();
+        return `$${trimmedFormula}$`;
+      });
+      
+      // 步骤 3：恢复代码
+      processedText = processedText.replace(/__CODE_BLOCK_(\d+)__/g, (_, index) => {
+        return codeBlocks[parseInt(index)];
+      });
+      
+      processedText = processedText.replace(/__INLINE_CODE_(\d+)__/g, (_, index) => {
+        return inlineCodes[parseInt(index)];
+      });
+      
+      return processedText;
+    };
+
+    const testCases = [
+      {
+        name: 'Markdown 列表（带空格）',
+        input: '- 建堆：$ O(m) $\n- $ m-1 $ 次合并操作，每次 $ O(\\log m) $',
+      },
+      {
+        name: 'Markdown 列表（无空格）',
+        input: '- 建堆：$O(m)$\n- $m-1$ 次合并操作，每次 $O(\\log m)$',
+      },
+      {
+        name: 'HTML 列表（未解析）',
+        input: '<ul>\n  <li>建堆：$ O(m) $</li>\n  <li>$ m-1 $ 次合并操作，每次 $ O(\\log m) $</li>\n</ul>',
+      },
+      {
+        name: '混合内容',
+        input: '时间复杂度分析：\n\n$$T(m) = O(m \\log m)$$\n\n具体步骤：\n- 建堆：$ O(m) $\n- $ m-1 $ 次合并操作，每次 $ O(\\log m) $',
+      },
+      {
+        name: '多个行内公式（有空格）',
+        input: '$ x $ jasdof joa $ y $',
+      },
+      {
+        name: '不完整的公式',
+        input: '$ x $ y $',
+      },
+      {
+        name: '嵌套在文本中的公式',
+        input: '已知变量 $ a $ 和 $ b $，则 $ a + b $ 的结果为...',
+      },
+      {
+        name: '行内代码中的 $（不应被处理）',
+        input: '使用 `$variable$` 来引用变量',
+      },
+      {
+        name: '代码块中的 $（不应被处理）',
+        input: '```python\nprice = $100\ntotal = $200\n```',
+      },
+      {
+        name: '混合：代码和公式',
+        input: '价格为 `$100`，而公式 $ x = 100 $ 表示变量。',
+      },
+    ];
+
+    const container = document.getElementById('test-cases');
+
+    testCases.forEach((testCase, index) => {
+      const div = document.createElement('div');
+      div.className = 'test-case';
+      
+      const title = document.createElement('h3');
+      title.textContent = `${index + 1}. ${testCase.name}`;
+      div.appendChild(title);
+      
+      const inputDiv = document.createElement('div');
+      inputDiv.className = 'input';
+      inputDiv.textContent = testCase.input;
+      div.appendChild(inputDiv);
+      
+      const outputDiv = document.createElement('div');
+      outputDiv.className = 'output';
+      // 应用预处理
+      const processedInput = preprocessFormulas(testCase.input);
+      outputDiv.innerHTML = md.render(processedInput);
+      div.appendChild(outputDiv);
+      
+      container.appendChild(div);
+    });
+  </script>
+</body>
+</html>
