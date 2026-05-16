@@ -56,6 +56,16 @@ export function GetAPIKey() {
 }
 
 /**
+ * GetModelConfig 获取模型配置（提供商和具体模型）
+ * @returns {$CancellablePromise<{ [_ in string]?: string }>}
+ */
+export function GetModelConfig() {
+    return $Call.ByID(2761228268).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
  * GetTraceState 获取全局会话的当前思路摘要（trace state）
  * Trace是LLM长期记忆的核心，用于压缩冗长的对话历史
  * @returns {$CancellablePromise<string>}
@@ -73,7 +83,7 @@ export function GetTraceState() {
  */
 export function ListSessions(scopeType, bookPath) {
     return $Call.ByID(2959228114, scopeType, bookPath).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType2($result);
     }));
 }
 
@@ -86,7 +96,7 @@ export function ListSessions(scopeType, bookPath) {
  */
 export function LoadSession(scopeType, bookPath, sessionID) {
     return $Call.ByID(3021999501, scopeType, bookPath, sessionID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType3($result);
     }));
 }
 
@@ -112,6 +122,15 @@ export function ResetConversation() {
  */
 export function SaveAPIKey(apiKey) {
     return $Call.ByID(2890408737, apiKey);
+}
+
+/**
+ * SaveModelConfig 保存模型配置到配置文件
+ * @param {{ [_ in string]?: string }} config
+ * @returns {$CancellablePromise<void>}
+ */
+export function SaveModelConfig(config) {
+    return $Call.ByID(1159545017, config);
 }
 
 /**
@@ -188,5 +207,6 @@ export function SendMessageStreamInSession(scopeType, bookPath, sessionID, messa
 
 // Private type creation functions
 const $$createType0 = $models.ChatSessionSummary.createFrom;
-const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = $models.ChatSessionDetail.createFrom;
+const $$createType1 = $Create.Map($Create.Any, $Create.Any);
+const $$createType2 = $Create.Array($$createType0);
+const $$createType3 = $models.ChatSessionDetail.createFrom;

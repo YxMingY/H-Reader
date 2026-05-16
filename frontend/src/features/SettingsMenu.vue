@@ -12,6 +12,7 @@
           </div>
 
           <div class="settings-body">
+            <!-- API Key -->
             <label class="settings-label" for="api-key-input">API_KEY</label>
             <input
               id="api-key-input"
@@ -24,6 +25,33 @@
               @keyup.enter="submit"
             />
             <p class="settings-hint">保存后会写入本地 config.json，并在下次启动时用于初始化后端。</p>
+
+            <!-- 模型提供商 -->
+            <label class="settings-label" for="provider-select" style="margin-top: 18px;">模型提供商</label>
+            <select
+              id="provider-select"
+              v-model="draftProvider"
+              class="settings-select"
+              @change="onProviderChange"
+            >
+              <option value="aliyun">阿里云通义千问</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="glm">智谱 GLM</option>
+            </select>
+
+            <!-- 具体模型 -->
+            <label class="settings-label" for="model-select">具体模型</label>
+            <select
+              id="model-select"
+              v-model="draftModel"
+              class="settings-select"
+            >
+              <option v-for="model in availableModels" :key="model.value" :value="model.value">
+                {{ model.label }}
+                <span v-if="model.multimodal" class="multimodal-badge">🖼️</span>
+              </option>
+            </select>
+            <p class="settings-hint">选择您要使用的 AI 模型。<span v-if="selectedModel?.multimodal">该模型支持图片理解。</span></p>
           </div>
 
           <div class="settings-actions">
@@ -37,7 +65,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 
 const props = defineProps({
   open: Boolean,
@@ -45,27 +73,83 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  provider: {
+    type: String,
+    default: 'aliyun',
+  },
+  model: {
+    type: String,
+    default: 'qwen3-omni-flash',
+  },
 });
 
 const emit = defineEmits(['update:open', 'save']);
 
 const draftKey = ref('');
+const draftProvider = ref('aliyun');
+const draftModel = ref('qwen3-omni-flash');
+
+// 各提供商的可用模型列表
+const modelOptions = {
+  aliyun: [
+    { value: 'qwen3-omni-flash', label: '通义千问 Omni Flash (多模态)', multimodal: true },
+    { value: 'qwen3.5-omni-plus', label: '通义千问 3.5 Omni Plus (多模态)', multimodal: true },
+    { value: 'qwen-turbo', label: '通义千问 Turbo' },
+    { value: 'qwen-plus', label: '通义千问 Plus' },
+    { value: 'qwen-max', label: '通义千问 Max' },
+  ],
+  deepseek: [
+    { value: 'deepseek-chat', label: 'DeepSeek Chat' },
+    { value: 'deepseek-coder', label: 'DeepSeek Coder' },
+  ],
+  glm: [
+    { value: 'glm-4', label: 'GLM-4 (多模态)', multimodal: true },
+    { value: 'glm-4-plus', label: 'GLM-4 Plus (多模态)', multimodal: true },
+    { value: 'glm-3-turbo', label: 'GLM-3 Turbo' },
+  ],
+};
+
+// 当前提供商的可用模型
+const availableModels = computed(() => {
+  return modelOptions[draftProvider.value] || [];
+});
+
+// 当前选中的模型对象
+const selectedModel = computed(() => {
+  return availableModels.value.find(m => m.value === draftModel.value);
+});
 
 watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) {
       draftKey.value = props.apiKey || '';
+      draftProvider.value = props.provider || 'aliyun';
+      draftModel.value = props.model || 'qwen3-omni-flash';
     }
   }
 );
+
+/**
+ * 当提供商改变时，自动选择该提供商的第一个模型
+ */
+const onProviderChange = () => {
+  const models = modelOptions[draftProvider.value];
+  if (models && models.length > 0) {
+    draftModel.value = models[0].value;
+  }
+};
 
 const close = () => {
   emit('update:open', false);
 };
 
 const submit = () => {
-  emit('save', draftKey.value.trim());
+  emit('save', {
+    apiKey: draftKey.value.trim(),
+    provider: draftProvider.value,
+    model: draftModel.value,
+  });
 };
 </script>
 
@@ -155,6 +239,34 @@ const submit = () => {
 .settings-input:focus {
   border-color: var(--accent-color);
   box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.12);
+}
+
+.settings-select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: #fff;
+  padding: 11px 12px;
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.settings-select:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.12);
+}
+
+.multimodal-badge {
+  margin-left: 6px;
+  font-size: 14px;
 }
 
 .settings-hint {

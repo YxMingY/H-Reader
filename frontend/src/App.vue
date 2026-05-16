@@ -25,7 +25,9 @@
             <SettingsMenu
               v-model:open="settingsOpen"
               :api-key="apiKey"
-              @save="saveApiKey"
+              :provider="modelProvider"
+              :model="modelName"
+              @save="saveSettings"
             />
           </div>
         </div>
@@ -147,6 +149,8 @@ const currentBookTitle = ref('');
 const currentBookPath = ref('');
 const pdfSource = ref(null);
 const apiKey = ref('');
+const modelProvider = ref('aliyun');
+const modelName = ref('qwen3-omni-flash');
 const settingsOpen = ref(false);
 const chatOpen = ref(false);
 const chatPanelWidth = ref(0);
@@ -208,6 +212,18 @@ const loadApiKey = async () => {
   }
 };
 
+const loadModelConfig = async () => {
+  try {
+    const config = await ChatService.GetModelConfig();
+    if (config) {
+      modelProvider.value = config.provider || 'aliyun';
+      modelName.value = config.model || 'qwen3-omni-flash';
+    }
+  } catch (err) {
+    console.error('读取模型配置失败', err);
+  }
+};
+
 const toggleSettings = async () => {
   if (!settingsOpen.value) {
     await loadApiKey();
@@ -240,18 +256,25 @@ const toggleChatPanel = () => {
   }
 };
 
-const saveApiKey = async (nextKey) => {
+const saveSettings = async (settings) => {
   try {
-    await ChatService.SaveAPIKey(nextKey);
-    apiKey.value = nextKey;
+    await ChatService.SaveAPIKey(settings.apiKey);
+    await ChatService.SaveModelConfig({
+      provider: settings.provider,
+      model: settings.model,
+    });
+    
+    apiKey.value = settings.apiKey;
+    modelProvider.value = settings.provider;
+    modelName.value = settings.model;
     settingsOpen.value = false;
     
     // API Key 保存后，检查是否需要显示/隐藏引导界面
     if (bookshelfRef.value) {
-      bookshelfRef.value.checkOnboarding(nextKey);
+      bookshelfRef.value.checkOnboarding(settings.apiKey);
     }
   } catch (err) {
-    alert('保存 API Key 失败：' + err.message);
+    alert('保存设置失败：' + err.message);
   }
 };
 
@@ -281,12 +304,15 @@ const stopChatResize = () => {
 };
 
 onMounted(() => {
-  loadApiKey().then(() => {
+  Promise.all([
+    loadApiKey(),
+    loadModelConfig()
+  ]).then(([apiKeyValue]) => {
     // API Key 加载完成后，检查是否需要显示引导界面
     // 使用 nextTick 确保 bookshelfRef 已经挂载
     nextTick(() => {
       if (bookshelfRef.value) {
-        bookshelfRef.value.checkOnboarding(apiKey.value);
+        bookshelfRef.value.checkOnboarding(apiKeyValue);
       }
     });
   });

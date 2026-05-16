@@ -30,7 +30,9 @@
 //
 //	{
 //	  "api_key": "sk-xxxxx",
-//	  "default_folder": "C:/Users/xxx/Documents/Papers"
+//	  "default_folder": "C:/Users/xxx/Documents/Papers",
+//	  "provider": "aliyun",
+//	  "model": "qwen-turbo"
 //	}
 package main
 
@@ -44,6 +46,8 @@ import (
 type Config struct {
 	API_KEY       string `json:"api_key"`        // LLM服务API密钥
 	DefaultFolder string `json:"default_folder"` // 默认PDF书籍文件夹路径
+	Provider      string `json:"provider"`       // 模型提供商：aliyun, deepseek, glm
+	Model         string `json:"model"`          // 具体模型名称
 }
 
 var (

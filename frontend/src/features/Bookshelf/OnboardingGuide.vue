@@ -26,7 +26,8 @@
             <!-- API Key 未设置时的提示和链接 -->
             <div v-if="!hasApiKey" class="api-key-info">
               <p class="info-text">
-                💡 您可以稍后在设置中配置，或直接跳过此步骤开始使用阅读器。
+                💡 您可以稍后在设置中配置，或直接跳过此步骤开始使用阅读器。<br/>
+                🛠️ 后续可在设置中更改模型提供商和具体模型。
               </p>
               <a 
                 href="https://help.aliyun.com/zh/model-studio/developer-reference/get-api-key" 

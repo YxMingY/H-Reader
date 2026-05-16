@@ -68,12 +68,22 @@ func NewChatService() *ChatService {
 		conversation: nil,
 	}
 
-	// 尝试使用已保存的API_KEY初始化client
+	// 尝试使用已保存的API_KEY和模型配置初始化client
 	if config.API_KEY != "" {
+		provider := config.Provider
+		if provider == "" {
+			provider = string(defaultProvider)
+		}
+
+		model := config.Model
+		if model == "" {
+			model = defaultModel
+		}
+
 		if client, err := llmkit.NewClient(llmkit.Config{
-			Provider: defaultProvider,
+			Provider: llmkit.ProviderType(provider),
 			APIKey:   config.API_KEY,
-			Model:    defaultModel,
+			Model:    model,
 		}); err == nil {
 			cs.client = client
 		}
@@ -393,10 +403,20 @@ func (c *ChatService) SaveAPIKey(apiKey string) error {
 	}
 
 	// 先验证API_KEY是否有效（创建临时client）
+	provider := c.config.Provider
+	if provider == "" {
+		provider = string(defaultProvider)
+	}
+
+	model := c.config.Model
+	if model == "" {
+		model = defaultModel
+	}
+
 	newClient, err := llmkit.NewClient(llmkit.Config{
-		Provider: defaultProvider,
+		Provider: llmkit.ProviderType(provider),
 		APIKey:   cleanKey,
-		Model:    defaultModel,
+		Model:    model,
 	})
 	if err != nil {
 		return fmt.Errorf("invalid api key: %w", err)
@@ -414,6 +434,64 @@ func (c *ChatService) SaveAPIKey(apiKey string) error {
 
 	c.client = newClient
 	c.conversation = nil
+
+	return nil
+}
+
+// GetModelConfig 获取模型配置（提供商和具体模型）
+func (c *ChatService) GetModelConfig() map[string]string {
+	if c.config == nil {
+		return map[string]string{
+			"provider": "aliyun",
+			"model":    defaultModel,
+		}
+	}
+
+	provider := c.config.Provider
+	if provider == "" {
+		provider = "aliyun"
+	}
+
+	model := c.config.Model
+	if model == "" {
+		model = defaultModel
+	}
+
+	return map[string]string{
+		"provider": provider,
+		"model":    model,
+	}
+}
+
+// SaveModelConfig 保存模型配置到配置文件
+func (c *ChatService) SaveModelConfig(config map[string]string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	provider := config["provider"]
+	model := config["model"]
+
+	// 更新配置
+	c.config.Provider = provider
+	c.config.Model = model
+
+	// 保存到文件
+	if err := c.config.SaveToFile(); err != nil {
+		return err
+	}
+
+	// 如果 client 已初始化，需要重新创建以使用新配置
+	if c.client != nil && c.config.API_KEY != "" {
+		newClient, err := llmkit.NewClient(llmkit.Config{
+			Provider: llmkit.ProviderType(provider),
+			APIKey:   c.config.API_KEY,
+			Model:    model,
+		})
+		if err == nil {
+			c.client = newClient
+			c.conversation = nil // 重置会话
+		}
+	}
 
 	return nil
 }
