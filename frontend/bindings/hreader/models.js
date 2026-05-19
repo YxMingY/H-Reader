@@ -71,11 +71,19 @@ export class ChatMessageRecord {
         }
         if (!("content" in $$source)) {
             /**
-             * 消息内容（仅文本，图片已消费）
+             * 消息内容（文本）
              * @member
              * @type {string}
              */
             this["content"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * 附件列表（图片路径或 base64）
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["attachments"] = undefined;
         }
         if (!("created_at" in $$source)) {
             /**
@@ -95,7 +103,11 @@ export class ChatMessageRecord {
      * @returns {ChatMessageRecord}
      */
     static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("attachments" in $$parsedSource) {
+            $$parsedSource["attachments"] = $$createField2_0($$parsedSource["attachments"]);
+        }
         return new ChatMessageRecord(/** @type {Partial<ChatMessageRecord>} */($$parsedSource));
     }
 }
@@ -144,8 +156,8 @@ export class ChatSessionDetail {
      * @returns {ChatSessionDetail}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType0;
-        const $$createField1_0 = $$createType2;
+        const $$createField0_0 = $$createType1;
+        const $$createField1_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("summary" in $$parsedSource) {
             $$parsedSource["summary"] = $$createField0_0($$parsedSource["summary"]);
@@ -255,6 +267,7 @@ export class ChatSessionSummary {
 }
 
 // Private type creation functions
-const $$createType0 = ChatSessionSummary.createFrom;
-const $$createType1 = ChatMessageRecord.createFrom;
-const $$createType2 = $Create.Array($$createType1);
+const $$createType0 = $Create.Array($Create.Any);
+const $$createType1 = ChatSessionSummary.createFrom;
+const $$createType2 = ChatMessageRecord.createFrom;
+const $$createType3 = $Create.Array($$createType2);

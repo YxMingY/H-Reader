@@ -6,6 +6,7 @@
  * - useChatInput: 输入管理（草稿、附件、文件选择）
  * - useChatStream: 流式响应管理（实时消息更新）
  * - useTools: 工具函数（Markdown 渲染等）
+ * - useScrollBottom: 滚动管理（智能滚动到底部）
  */
 
 /** 会话管理 Composable */
@@ -19,3 +20,6 @@ export { useChatStream } from './useChatStream';
 
 /** 工具函数 Composable */
 export { useTools } from './useTools';
+
+/** 滚动管理 Composable */
+export { useScrollBottom } from './useScrollBottom';

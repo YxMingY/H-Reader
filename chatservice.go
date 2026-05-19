@@ -361,8 +361,9 @@ func (c *ChatService) SendMessageStreamInSession(scopeType, bookPath, sessionID,
 		now := time.Now().Format(time.RFC3339)
 		stored.LLMStateJSON = state
 		stored.UpdatedAt = now
+		// 保存用户消息时记录附件（图片）
 		stored.Messages = append(stored.Messages,
-			ChatMessageRecord{Role: "user", Content: text, CreatedAt: now},
+			ChatMessageRecord{Role: "user", Content: text, Attachments: imagePaths, CreatedAt: now},
 			ChatMessageRecord{Role: "assistant", Content: full, CreatedAt: now},
 		)
 		stored.MessageCount = len(stored.Messages)
@@ -553,9 +554,10 @@ func (c *ChatService) ensureConversationLocked() error {
 		return nil
 	}
 
-	// 从client创建新的conversation
+	// 从 client 创建新的 conversation
 	conversation := c.client.NewTracedConversation(nil)
 	conversation.SetMaxHistory(8)
+	conversation.SetMaxTokens(4096) // 提高最大输出 token 限制
 	c.conversation = conversation
 
 	return nil
@@ -572,6 +574,7 @@ func (c *ChatService) newSessionConversation(llmStateJSON string) (*llmkit.Trace
 
 	conv := c.client.NewTracedConversation(nil)
 	conv.SetMaxHistory(8)
+	conv.SetMaxTokens(4096) // 提高最大输出 token 限制
 	if strings.TrimSpace(llmStateJSON) != "" {
 		if err := conv.ImportJSON(llmStateJSON); err != nil {
 			return nil, fmt.Errorf("restore session failed: %w", err)

@@ -8,7 +8,7 @@
     - 提供滚动容器，支持自动滚动到底部
     - 处理加载状态和空状态
   -->
-  <div ref="messageViewportRef" class="chat-messages">
+  <div ref="messageViewportRef" class="chat-messages" @scroll="handleScroll">
     <!-- 加载状态 -->
     <div v-if="loadingMessages" class="chat-empty">正在加载对话...</div>
     <!-- 空状态 -->
@@ -29,8 +29,22 @@
           class="chat-message-content markdown-body"
           v-html="getRenderedHtml(index)"
         ></div>
-        <!-- 用户消息：纯文本显示 -->
-        <div v-else class="chat-message-content">{{ message.content }}</div>
+        <!-- 用户消息：显示文本和图片附件 -->
+        <div v-else class="chat-message-user">
+          <!-- 图片附件列表 -->
+          <div v-if="message.attachments && message.attachments.length > 0" class="user-attachments">
+            <img
+              v-for="(img, imgIndex) in message.attachments"
+              :key="imgIndex"
+              :src="getImageSrc(img)"
+              :alt="'附件图片 ' + (imgIndex + 1)"
+              class="attachment-image"
+              @click="openImage(img)"
+            />
+          </div>
+          <!-- 文本内容 -->
+          <div v-if="message.content" class="chat-message-content">{{ message.content }}</div>
+        </div>
       </div>
     </div>
   </div>
@@ -71,6 +85,15 @@ const props = defineProps({
     required: true
   }
 });
+
+// ========================================
+// Emits 定义
+// ========================================
+
+const emit = defineEmits([
+  /** 滚动事件，向父组件传递 */
+  'scroll'
+]);
 
 // ========================================
 // 响应式引用
@@ -162,6 +185,40 @@ const getRenderedHtml = (index) => {
   return renderedHtml.value[index] || '';
 };
 
+/**
+ * 获取图片的 src
+ * 
+ * @param {string} imgPath - 图片路径或 base64
+ * @returns {string} 图片的 src
+ */
+const getImageSrc = (imgPath) => {
+  // 如果是 base64 或完整 URL，直接返回
+  if (imgPath.startsWith('data:') || imgPath.startsWith('http://') || imgPath.startsWith('https://')) {
+    return imgPath;
+  }
+  // 否则假设是本地文件路径，需要根据实际情况处理
+  // TODO: 如果后端返回的是文件路径，可能需要转换为可访问的 URL
+  return imgPath;
+};
+
+/**
+ * 点击图片时打开大图
+ * 
+ * @param {string} imgPath - 图片路径
+ */
+const openImage = (imgPath) => {
+  // TODO: 实现图片预览功能（可以使用模态框或新窗口）
+  console.log('点击图片:', imgPath);
+};
+
+/**
+ * 处理滚动事件
+ * 向父组件传递 scroll 事件
+ */
+const handleScroll = (event) => {
+  emit('scroll', event);
+};
+
 // ========================================
 // 公开 API
 // ========================================
@@ -221,6 +278,38 @@ onBeforeUnmount(() => {
   border-color: rgba(0, 122, 204, 0.14);
 }
 
+/* 用户消息容器：支持文本和图片混合显示 */
+.chat-message-user {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* 用户消息的图片附件列表 */
+.user-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* 附件图片样式 */
+.attachment-image {
+  max-width: 200px;
+  max-height: 200px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.attachment-image:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 .chat-message.assistant {
   background: rgba(255, 255, 255, 0.96);
 }
@@ -254,6 +343,40 @@ onBeforeUnmount(() => {
 
 .chat-message-content.markdown-body :deep(p:last-child) {
   margin-bottom: 0;
+}
+
+/* 标题样式 */
+.chat-message-content.markdown-body :deep(h1),
+.chat-message-content.markdown-body :deep(h2),
+.chat-message-content.markdown-body :deep(h3),
+.chat-message-content.markdown-body :deep(h4),
+.chat-message-content.markdown-body :deep(h5),
+.chat-message-content.markdown-body :deep(h6) {
+  margin: 1em 0 0.5em;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.chat-message-content.markdown-body :deep(h1) {
+  font-size: 1.5em;
+}
+
+.chat-message-content.markdown-body :deep(h2) {
+  font-size: 1.3em;
+}
+
+.chat-message-content.markdown-body :deep(h3) {
+  font-size: 1.15em;
+}
+
+.chat-message-content.markdown-body :deep(h4) {
+  font-size: 1.05em;
+}
+
+.chat-message-content.markdown-body :deep(h5),
+.chat-message-content.markdown-body :deep(h6) {
+  font-size: 1em;
 }
 
 .chat-message-content.markdown-body :deep(ul),
@@ -346,6 +469,12 @@ onBeforeUnmount(() => {
   overflow-x: auto;
   overflow-y: hidden;
   text-align: center;
+}
+
+/* 确保所有内容都可以被选中和复制 */
+.chat-message-content.markdown-body :deep(*) {
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 
 .chat-empty {

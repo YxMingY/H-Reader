@@ -63,9 +63,10 @@ type ChatSessionSummary struct {
 // ChatMessageRecord 存储在会话中的单条消息记录
 // 用途：向前端返回完整对话历史供UI渲染，独立于LLM状态存储
 type ChatMessageRecord struct {
-	Role      string `json:"role"`       // "user" 或 "assistant"
-	Content   string `json:"content"`    // 消息内容（仅文本，图片已消费）
-	CreatedAt string `json:"created_at"` // RFC3339时间戳
+	Role        string   `json:"role"`                  // "user" 或 "assistant"
+	Content     string   `json:"content"`               // 消息内容（文本）
+	Attachments []string `json:"attachments,omitempty"` // 附件列表（图片路径或 base64）
+	CreatedAt   string   `json:"created_at"`            // RFC3339时间戳
 }
 
 // ChatSessionDetail 完整会话详情（前端查看会话时返回）

@@ -64,6 +64,7 @@
         :messages="messages"
         :loading-messages="loadingMessages"
         :render-markdown="renderMarkdown"
+        @scroll="handleScroll"
       />
     
       <!-- 消息输入区域：包含附件预览、输入框和操作按钮 -->
@@ -101,7 +102,7 @@
 
 import { computed, nextTick, ref, watch } from 'vue';
 import { ChatService } from '../../../bindings/hreader';
-import { useChatInput, useChatStream, useSession, useTools } from './composables';
+import { useChatInput, useChatStream, useSession, useTools, useScrollBottom } from './composables';
 import { SessionList, MessageDisplay, InputArea } from './components';
 
 // ========================================
@@ -183,38 +184,24 @@ const scopeKey = computed(() =>
 /** Markdown 渲染工具 */
 const { renderMarkdown } = useTools();
 
-
-// ========================================
-// 核心功能函数
-// ========================================
+/** 智能滚动管理 */
+const {
+  userScrolledAway,
+  handleScroll,
+  scrollToBottom: smartScrollToBottom,
+  forceScrollToBottom,
+  resetScrollState,
+} = useScrollBottom();
 
 /**
- * 将消息视口滚动到底部
+ * 将消息视口滚动到底部（包装函数）
  * 
- * 实现策略：
- * - 使用 nextTick 等待 DOM 更新完成
- * - 使用多层 requestAnimationFrame 确保异步渲染（Markdown、图片）完成后仍能正确滚动
- * - 适用场景：新增消息、切换会话、流式响应更新
- * 
- * 技术说明：
- * Markdown 渲染和图片加载是异步操作，单次滚动可能发生在内容完全渲染之前，
- * 导致滚动位置不准确。通过多帧滚动可以覆盖这种延迟，确保最终滚动到正确位置。
+ * 调用 useScrollBottom composable 中的智能滚动方法
+ * 自动获取消息容器并传递
  */
 const scrollToBottom = async () => {
-  await nextTick();
   const container = messageDisplayRef.value?.messageViewportRef;
-  if (container) {
-    // 第一次滚动：立即执行
-    container.scrollTop = container.scrollHeight;
-    // 第二次滚动：下一帧执行，等待部分异步渲染
-    requestAnimationFrame(() => {
-      container.scrollTop = container.scrollHeight;
-      // 第三次滚动：再下一帧执行，确保所有内容渲染完成
-      requestAnimationFrame(() => {
-        container.scrollTop = container.scrollHeight;
-      });
-    });
-  }
+  await smartScrollToBottom(container);
 };
 
 // ========================================
@@ -248,118 +235,20 @@ const {
   createSessionAndEnter, 
   backToSessions, 
   deleteSession 
-} = useSession(props, scopeTitle, scopeBookPath, errorMessage, scrollToBottom, clearInput);
+} = useSession(props, scopeTitle, scopeBookPath, errorMessage, scrollToBottom, resetScrollState, clearInput);
 
 /** 流式响应管理：处理后端推送的实时消息更新 */
 const { 
   streamSessionId,
   streamAssistantIndex,
   resetStreamingState,
+  sendMessage,
   onStreamChunk,
   onStreamDone,
   onStreamError,
-} = useChatStream(activeSessionId, sending, messages, errorMessage, loadSession, refreshSessions, scrollToBottom);
+} = useChatStream(activeSessionId, sending, messages, errorMessage, loadSession, refreshSessions, scrollToBottom, createSession, props, draft, attachments);
 
 
-// ========================================
-// 业务逻辑函数
-// ========================================
-
-/**
- * 发送消息 - 核心业务逻辑
- * 
- * 执行流程：
- * 1. 验证输入：文本或附件至少有一个
- * 2. 会话检查：如果没有活跃会话，自动创建新会话
- * 3. 乐观更新：在本地创建 user 和 assistant 占位消息，提供即时反馈
- * 4. 流式追踪：设置 streamSessionId 和 streamAssistantIndex
- * 5. 清理输入：清空草稿和附件列表
- * 6. 滚动定位：滚动到消息底部
- * 7. API 调用：调用后端流式接口 SendMessageStreamInSession
- * 8. 错误处理：失败时回滚占位消息，显示错误提示
- * 
- * 设计原则：
- * - 乐观 UI：提前显示占位消息，提升用户体验
- * - 失败回滚：API 调用失败时恢复 UI 状态，保持一致性
- * - 多模态支持：同时支持纯文本、纯图片、图文混合发送
- * 
- * 注意事项：
- * - API 调用可能立即失败（如 API key 未配置）
- * - 也可能在后台异步失败（通过网络事件监听器捕获）
- */
-const sendMessage = async () => {
-  // 步骤 1: 验证输入
-  const text = draft.value.trim();
-  if (!text && attachments.value.length === 0) return;
-
-  // 步骤 2: 初始化状态
-  errorMessage.value = '';
-  sending.value = true;
-  
-  try {
-    // 步骤 3: 确保有活跃会话
-    let sessionId = activeSessionId.value;
-    if (!sessionId) {
-      const summary = await createSession();
-      if (!summary) {
-        throw new Error('创建会话失败');
-      }
-      sessionId = summary.session_id;
-      activeSessionId.value = sessionId;
-    }
-
-    // 步骤 4: 乐观更新 - 创建占位消息
-    const localNow = new Date().toISOString();
-    messages.value.push({ role: 'user', content: text, created_at: localNow });
-    messages.value.push({ role: 'assistant', content: '', created_at: localNow });
-    
-    // 步骤 5: 设置流式追踪状态
-    streamSessionId.value = sessionId;
-    streamAssistantIndex.value = messages.value.length - 1;
-
-    // 步骤 6: 准备附件数据并清理输入
-    const pendingImages = attachments.value.map((item) => item.dataUrl);
-    draft.value = '';
-    attachments.value = [];
-    
-    // 步骤 7: 滚动到底部
-    await scrollToBottom();
-
-    // 步骤 8: 调用后端流式 API
-    await ChatService.SendMessageStreamInSession(
-      props.scopeType,
-      scopeBookPath.value,
-      sessionId,
-      text,
-      pendingImages
-    );
-  } catch (err) {
-    // 错误处理：回滚占位消息
-    console.error('sendMessage catch error:', err);
-    
-    // 移除 assistant 占位消息
-    if (streamAssistantIndex.value >= 0 && streamAssistantIndex.value < messages.value.length) {
-      messages.value.splice(streamAssistantIndex.value, 1);
-      streamAssistantIndex.value = -1;
-    }
-    
-    // 移除 user 占位消息（如果存在）
-    if (messages.value.length && messages.value[messages.value.length - 1]?.role === 'user' && messages.value[messages.value.length - 1]?.content === text) {
-      messages.value.splice(messages.value.length - 1, 1);
-    }
-    
-    // 重置流式状态
-    resetStreamingState();
-    
-    // 显示错误消息
-    const errorMsg = err?.message || String(err) || '发送失败';
-    errorMessage.value = `发送失败：${errorMsg}`;
-    console.error('sendMessage error:', err);
-  } finally {
-    // 无论成功与否，都重置发送状态
-    sending.value = false;
-  }
-};
 
 // ========================================
 // 生命周期和监听器

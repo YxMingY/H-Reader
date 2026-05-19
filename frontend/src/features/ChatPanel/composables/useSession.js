@@ -12,14 +12,15 @@
  * @param {ComputedRef<string>} scopeBookPath - 作用域书籍路径
  * @param {Ref<string>} errorMessage - 错误消息引用
  * @param {Function} scrollToBottom - 滚动到底部函数
+ * @param {Function} resetScrollState - 重置滚动状态函数
  * @param {Function} clearInput - 清空输入函数
  * @returns {Object} 会话管理相关的状态和方法
  */
 
-import { ref, watch } from 'vue';
+import { ref, watch, nextTick } from 'vue';
 import { ChatService } from '../../../../bindings/hreader';
 
-export function useSession(props, scopeTitle, scopeBookPath, errorMessage, scrollToBottom, clearInput) {
+export function useSession(props, scopeTitle, scopeBookPath, errorMessage, scrollToBottom, resetScrollState, clearInput) {
   // ========================================
   // 响应式状态
   // ========================================
@@ -134,6 +135,11 @@ const loadSession = async (sessionId, options = {}) => {
     if (!options.keepSelection) {
       upsertSessionSummary(detail.summary);
     }
+    // 等待 DOM 更新完成
+    await nextTick();
+    // 重置滚动状态，确保进入新会话时能正常滚动
+    resetScrollState();
+    // 滚动到最新消息底部
     await scrollToBottom();
   } catch (err) {
     errorMessage.value = `加载对话失败：${err?.message || err}`;

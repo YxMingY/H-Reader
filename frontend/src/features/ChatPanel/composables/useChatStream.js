@@ -6,6 +6,7 @@
  * - 实时更新 assistant 消息内容
  * - 处理流式响应的生命周期（开始、进行中、完成、错误）
  * - 管理事件订阅和清理
+ * - 发送消息并管理流式响应
  * 
  * 工作流程：
  * 1. 用户发送消息 → 创建占位消息 → 调用后端 API
@@ -21,13 +22,18 @@
  * @param {Function} loadSession - 加载会话函数
  * @param {Function} refreshSessions - 刷新会话列表函数
  * @param {Function} scrollToBottom - 滚动到底部函数
+ * @param {Function} createSession - 创建会话函数
+ * @param {Object} props - 组件 props（scopeType, bookPath 等）
+ * @param {Ref<string>} draft - 草稿文本
+ * @param {Ref<Array>} attachments - 附件列表
  * @returns {Object} 流式响应相关的状态和方法
  */
 
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { Events } from '@wailsio/runtime';
+import { ChatService } from '../../../../bindings/hreader';
 
-export function useChatStream(activeSessionId, sending, messages, errorMessage, loadSession, refreshSessions, scrollToBottom) {
+export function useChatStream(activeSessionId, sending, messages, errorMessage, loadSession, refreshSessions, scrollToBottom, createSession, props, draft, attachments) {
   // ========================================
   // 响应式状态
   // ========================================
@@ -75,6 +81,119 @@ const resetStreamingState = () => {
   streamSessionId.value = '';
   streamAssistantIndex.value = -1;
   sending.value = false;
+};
+
+/**
+ * 发送消息 - 核心业务逻辑
+ * 
+ * 执行流程：
+ * 1. 验证输入：文本或附件至少有一个
+ * 2. 会话检查：如果没有活跃会话，自动创建新会话
+ * 3. 乐观更新：在本地创建 user 和 assistant 占位消息，提供即时反馈
+ * 4. 流式追踪：设置 streamSessionId 和 streamAssistantIndex
+ * 5. 清理输入：清空草稿和附件列表
+ * 6. 滚动定位：滚动到消息底部
+ * 7. API 调用：调用后端流式接口 SendMessageStreamInSession
+ * 8. 错误处理：失败时回滚占位消息，显示错误提示
+ * 
+ * 设计原则：
+ * - 乐观 UI：提前显示占位消息，提升用户体验
+ * - 失败回滚：API 调用失败时恢复 UI 状态，保持一致性
+ * - 多模态支持：同时支持纯文本、纯图片、图文混合发送
+ * 
+ * 注意事项：
+ * - API 调用可能立即失败（如 API key 未配置）
+ * - 也可能在后台异步失败（通过网络事件监听器捕获）
+ */
+const sendMessage = async () => {
+  // 步骤 1: 验证输入
+  let text = draft.value.trim();
+  
+  // 如果只有图片没有文字，自动添加默认提示
+  if (!text && attachments.value.length > 0) {
+    text = '请解释图片';
+  }
+  
+  if (!text && attachments.value.length === 0) return;
+
+  // 步骤 2: 初始化状态
+  errorMessage.value = '';
+  sending.value = true;
+  
+  try {
+    // 步骤 3: 确保有活跃会话
+    let sessionId = activeSessionId.value;
+    if (!sessionId) {
+      const summary = await createSession();
+      if (!summary) {
+        throw new Error('创建会话失败');
+      }
+      sessionId = summary.session_id;
+      activeSessionId.value = sessionId;
+    }
+
+    // 步骤 4: 乐观更新 - 创建占位消息
+    const localNow = new Date().toISOString();
+    
+    // 准备附件数据（用于立即显示）
+    const pendingImages = attachments.value.map((item) => item.dataUrl);
+    
+    // 创建用户消息（包含附件）
+    messages.value.push({ 
+      role: 'user', 
+      content: text, 
+      attachments: pendingImages.length > 0 ? pendingImages : undefined,
+      created_at: localNow 
+    });
+    
+    // 创建 assistant 占位消息
+    messages.value.push({ role: 'assistant', content: '', created_at: localNow });
+    
+    // 步骤 5: 设置流式追踪状态
+    streamSessionId.value = sessionId;
+    streamAssistantIndex.value = messages.value.length - 1;
+
+    // 步骤 6: 清理输入
+    draft.value = '';
+    attachments.value = [];
+    
+    // 步骤 7: 滚动到底部
+    await scrollToBottom();
+
+    // 步骤 8: 调用后端流式 API
+    await ChatService.SendMessageStreamInSession(
+      props.scopeType,
+      props.scopeType === 'book' ? props.bookPath : '',
+      sessionId,
+      text,
+      pendingImages
+    );
+  } catch (err) {
+    // 错误处理：回滚占位消息
+    console.error('sendMessage catch error:', err);
+    
+    // 移除 assistant 占位消息
+    if (streamAssistantIndex.value >= 0 && streamAssistantIndex.value < messages.value.length) {
+      messages.value.splice(streamAssistantIndex.value, 1);
+      streamAssistantIndex.value = -1;
+    }
+    
+    // 移除 user 占位消息（如果存在）
+    if (messages.value.length && messages.value[messages.value.length - 1]?.role === 'user' && messages.value[messages.value.length - 1]?.content === text) {
+      messages.value.splice(messages.value.length - 1, 1);
+    }
+    
+    // 重置流式状态
+    resetStreamingState();
+    
+    // 显示错误消息
+    const errorMsg = err?.message || String(err) || '发送失败';
+    errorMessage.value = `发送失败：${errorMsg}`;
+    console.error('sendMessage error:', err);
+  } finally {
+    // 无论成功与否，都重置发送状态
+    sending.value = false;
+  }
 };
 
 /**
@@ -247,6 +366,7 @@ return {
   streamSessionId,
   streamAssistantIndex,
   resetStreamingState,
+  sendMessage,
   onStreamChunk,
   onStreamDone,
   onStreamError,

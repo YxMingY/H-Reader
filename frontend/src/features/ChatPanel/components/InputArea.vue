@@ -30,6 +30,7 @@
       @keydown.meta.enter.prevent="sendMessage"
       @keydown.ctrl.enter.prevent="sendMessage"
       @keydown.alt.enter.prevent="sendMessage"
+      @keydown.shift.enter.prevent="sendMessage"
       @paste="handlePaste"
     ></textarea>
 
