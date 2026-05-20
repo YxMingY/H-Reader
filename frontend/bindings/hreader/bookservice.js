@@ -18,6 +18,29 @@ export function ChooseDir() {
 }
 
 /**
+ * GetReadingProgress: 获取阅读进度（对外 API）
+ * 
+ * 工作流程：
+ * 1. 根据文件路径计算 SHA1 哈希
+ * 2. 调用 progressStore.GetProgress 查询
+ * 
+ * 参数：
+ *   - bookPath: PDF 文件的完整路径
+ * 
+ * 返回：
+ *   - int: 保存的页码（未找到或出错时返回 1）
+ * 
+ * 注意：
+ * - 出错时返回默认值 1，不影响正常阅读
+ * - 前端无需处理错误，直接使用返回值即可
+ * @param {string} bookPath
+ * @returns {$CancellablePromise<number>}
+ */
+export function GetReadingProgress(bookPath) {
+    return $Call.ByID(1104918903, bookPath);
+}
+
+/**
  * @returns {$CancellablePromise<string>}
  */
 export function GetScanDir() {
@@ -42,6 +65,27 @@ export function LoadPDF(path) {
  */
 export function OpenInExplorer(path) {
     return $Call.ByID(938676052, path);
+}
+
+/**
+ * SaveReadingProgress: 保存阅读进度（对外 API）
+ * 
+ * 工作流程：
+ * 1. 根据文件路径计算 SHA1 哈希
+ * 2. 调用 progressStore.SaveProgress 保存
+ * 
+ * 参数：
+ *   - bookPath: PDF 文件的完整路径
+ *   - page: 当前页码
+ * 
+ * 返回：
+ *   - error: 计算哈希或保存失败时的错误
+ * @param {string} bookPath
+ * @param {number} page
+ * @returns {$CancellablePromise<void>}
+ */
+export function SaveReadingProgress(bookPath, page) {
+    return $Call.ByID(168603576, bookPath, page);
 }
 
 /**

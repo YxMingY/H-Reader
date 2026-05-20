@@ -73,6 +73,7 @@ export function useTools() {
   //   - 'brackets': \(...\) (行内) 和 \[...\] (块级)
   //   - 'doxygen': \f$...\f$ (行内), \f(...\f) (行内), \f[...\f] (块级)
   //   - 可以使用数组组合多种类型，如 ['dollars', 'brackets']
+  //   - 也可以自定义分隔符规则（见下方配置）
   // - throwOnError: false - 渲染错误时不抛出异常，而是显示原始文本（适合流式输出）
   // - errorColor: '#cc0000' - 错误文本的颜色
   // - katexOptions: KaTeX 渲染选项
@@ -124,6 +125,14 @@ export function useTools() {
     });
     
     // 步骤 2：预处理公式（此时代码已被保护，不会被误伤）
+    
+    // 2.1 将 AI 输出的 [...] 格式转换为 $$...$$ （块级公式）
+    // 注意：只匹配独占一行的 [...]，避免与 Markdown 链接冲突
+    processedText = processedText.replace(/(?:^|\n)\[([^\]]+)\](?=$|\n)/gm, (_, formula) => {
+      return `\n$$${formula.trim()}$$\n`;
+    });
+    
+    // 2.2 清理 $...$ 周围的空格
     processedText = processedText.replace(/\$\s*([^\n$]+?)\s*\$/g, (_, formula) => {
       const trimmedFormula = formula.trim();
       return `$${trimmedFormula}$`;

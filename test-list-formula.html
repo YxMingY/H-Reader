@@ -64,7 +64,7 @@
       errorColor: '#cc0000',
     });
 
-    // 预处理函数：移除行内公式分隔符 $ 与内容之间的空格
+    // 预处理函数：移除行内公式分隔符 $ 与内容之间的空格，并转换 [...] 格式
     const preprocessFormulas = (text) => {
       // 步骤 1：保护代码块和行内代码
       const codeBlocks = [];
@@ -81,6 +81,14 @@
       });
       
       // 步骤 2：处理公式
+      
+      // 2.1 将 AI 输出的 [...] 格式转换为 $$...$$ （块级公式）
+      // 注意：只匹配独占一行的 [...]，避免与 Markdown 链接冲突
+      processedText = processedText.replace(/(?:^|\n)\[([^\]]+)\](?=$|\n)/gm, (_, formula) => {
+        return `\n$$${formula.trim()}$$\n`;
+      });
+      
+      // 2.2 清理 $...$ 周围的空格
       processedText = processedText.replace(/\$\s*([^\n$]+?)\s*\$/g, (_, formula) => {
         const trimmedFormula = formula.trim();
         return `$${trimmedFormula}$`;
@@ -138,6 +146,38 @@
       {
         name: '混合：代码和公式',
         input: '价格为 `$100`，而公式 $ x = 100 $ 表示变量。',
+      },
+      {
+        name: '[...] 格式公式（独占一行）',
+        input: '接收端对采样长度为 L_CP + N 的信号做DFT，得到频域信号：\n[\nY_k = H_k X_k + Z_k\n]',
+      },
+      {
+        name: '[...] 格式公式（简单）',
+        input: '这是一个公式：\n[\na^2 + b^2 = c^2\n]',
+      },
+      {
+        name: '多个 [...] 公式',
+        input: '第一个公式：\n[\nx = 1\n]\n\n第二个公式：\n[\ny = 2\n]',
+      },
+      {
+        name: '[...] 与 $...$ 混合使用',
+        input: '行内公式 $E=mc^2$ 和块级公式：\n[\nF = ma\n]',
+      },
+      {
+        name: 'Markdown 链接（不应被转换）',
+        input: '点击 [这里](https://example.com) 查看文档',
+      },
+      {
+        name: '列表项中的 [...]（不应被转换）',
+        input: '- 项目 [item1]\n- 项目 [item2]',
+      },
+      {
+        name: '代码块中的 [...]（不应被转换）',
+        input: '```python\narr = [1, 2, 3]\ndict = {"key": "value"}\n```',
+      },
+      {
+        name: '行内代码中的 [...]（不应被转换）',
+        input: '使用 `[1, 2, 3]` 来创建数组',
       },
     ];
 

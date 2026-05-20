@@ -23,6 +23,14 @@
 // - 内容哈希：书籍使用文件内容SHA1识别，而非路径
 package main
 
+/*
+模型信息和APIKey是保存在后端的Client里的，
+当 前端保存新的模型时，
+调用后端的SaveModelConfig，
+后端替换信的Client，
+并下次发送用新的Client生成Conversation，
+这里已经隐含了应用了新的模型
+*/
 import (
 	"context"
 	"fmt"

@@ -14,3 +14,6 @@ export { useScrollPage } from './useScrollPage'
 
 // 截图功能
 export { useScreenshot } from './useScreenshot'
+
+// 阅读进度管理
+export { useReadingProgress } from './useReadingProgress'

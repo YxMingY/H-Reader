@@ -20,6 +20,9 @@ func init() {
 }
 
 func main() {
+	// 初始化阅读进度存储
+	initProgressStore()
+
 	wailApp := application.New(application.Options{
 		Name:        "hreader",
 		Description: "A H File Reader",
