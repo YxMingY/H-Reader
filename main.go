@@ -3,6 +3,8 @@ package main
 import (
 	"embed"
 	_ "embed"
+	"hreader/services/book"
+	"hreader/services/chat"
 	"log"
 	"time"
 
@@ -21,15 +23,15 @@ func init() {
 
 func main() {
 	// 初始化阅读进度存储
-	initProgressStore()
+	book.InitProgressStore()
 
 	wailApp := application.New(application.Options{
 		Name:        "hreader",
 		Description: "A H File Reader",
 		Services: []application.Service{
 			application.NewService(&GreetService{}),
-			application.NewService(&BookService{}),
-			application.NewService(NewChatService()),
+			application.NewService(&book.BookService{}),
+			application.NewService(chat.NewChatService()),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

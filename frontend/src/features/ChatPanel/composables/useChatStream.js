@@ -31,7 +31,7 @@
 
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
 import { Events } from '@wailsio/runtime';
-import { ChatService } from '../../../../bindings/hreader';
+import { ChatService } from '../../../../bindings/hreader/services/chat';
 
 export function useChatStream(activeSessionId, sending, messages, errorMessage, loadSession, refreshSessions, scrollToBottom, createSession, props, draft, attachments) {
   // ========================================

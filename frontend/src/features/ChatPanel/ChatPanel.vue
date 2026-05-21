@@ -101,7 +101,7 @@
  */
 
 import { computed, nextTick, ref, watch } from 'vue';
-import { ChatService } from '../../../bindings/hreader';
+import { ChatService } from '../../../bindings/hreader/services/chat';
 import { useChatInput, useChatStream, useSession, useTools, useScrollBottom } from './composables';
 import { SessionList, MessageDisplay, InputArea } from './components';
 

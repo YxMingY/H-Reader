@@ -119,7 +119,8 @@
  */
 
 import { computed } from 'vue';
-import { BookService, ChatService } from '../../../bindings/hreader';
+import { ChatService } from '../../../bindings/hreader/services/chat'; //这个路径是正确的，不要修改
+import { BookService } from '../../../bindings/hreader/services/book';
 
 const props = defineProps({
   /** API Key 是否已设置 */

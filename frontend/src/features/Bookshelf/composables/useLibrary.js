@@ -1,5 +1,5 @@
 import { ref, onMounted } from 'vue';
-import { BookService } from '../../../../bindings/hreader';
+import { BookService } from '../../../../bindings/hreader/services/book';
 
 /**
  * useLibrary - 图书库管理 Composable

@@ -18,7 +18,7 @@
  */
 
 import { ref, watch, nextTick } from 'vue';
-import { ChatService } from '../../../../bindings/hreader';
+import { ChatService } from '../../../../bindings/hreader/services/chat';
 
 export function useSession(props, scopeTitle, scopeBookPath, errorMessage, scrollToBottom, resetScrollState, clearInput) {
   // ========================================

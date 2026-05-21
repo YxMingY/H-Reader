@@ -148,8 +148,8 @@ import Reader from './features/Reader/Reader.vue';
 import ChatPanel from './features/ChatPanel/ChatPanel.vue';
 import SettingsMenu from './features/SettingsMenu.vue';
 
-import { BookService, ChatService } from '../bindings/hreader'; //这个路径是正确的，不要修改
-
+import { ChatService } from '../bindings/hreader/services/chat'; //这个路径是正确的，不要修改
+import { BookService } from '../bindings/hreader/services/book';
 // --- 状态定义 ---
 const view = ref('library');
 const currentBookTitle = ref('');

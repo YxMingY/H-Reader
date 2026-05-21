@@ -7,53 +7,11 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
- * BookInfo 书籍信息结构
- */
-export class BookInfo {
-    /**
-     * Creates a new BookInfo instance.
-     * @param {Partial<BookInfo>} [$$source = {}] - The source object to create the BookInfo.
-     */
-    constructor($$source = {}) {
-        if (!("id" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["id"] = "";
-        }
-        if (!("title" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["title"] = "";
-        }
-        if (!("path" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["path"] = "";
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new BookInfo instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {BookInfo}
-     */
-    static createFrom($$source = {}) {
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new BookInfo(/** @type {Partial<BookInfo>} */($$parsedSource));
-    }
-}
-
-/**
  * ChatMessageRecord 存储在会话中的单条消息记录
- * 用途：向前端返回完整对话历史供UI渲染，独立于LLM状态存储
+ * 
+ * 用途：
+ *   - 向前端返回完整对话历史供 UI 渲染
+ *   - 独立于 LLM 状态存储（应用层维护的消息列表）
  */
 export class ChatMessageRecord {
     /**
@@ -87,7 +45,7 @@ export class ChatMessageRecord {
         }
         if (!("created_at" in $$source)) {
             /**
-             * RFC3339时间戳
+             * RFC3339 时间戳
              * @member
              * @type {string}
              */
@@ -114,7 +72,11 @@ export class ChatMessageRecord {
 
 /**
  * ChatSessionDetail 完整会话详情（前端查看会话时返回）
- * 包含摘要、消息历史、LLM状态三部分
+ * 
+ * 包含三部分：
+ *   - Summary:  会话元数据（标题、时间等）
+ *   - Messages: UI 显示的消息列表
+ *   - LLMState: TracedConversation.ExportJSON() 序列化后的状态
  */
 export class ChatSessionDetail {
     /**
@@ -132,7 +94,7 @@ export class ChatSessionDetail {
         }
         if (!("messages" in $$source)) {
             /**
-             * UI显示的消息列表
+             * UI 显示的消息列表
              * @member
              * @type {ChatMessageRecord[]}
              */
@@ -140,7 +102,7 @@ export class ChatSessionDetail {
         }
         if (!("llm_state_json" in $$source)) {
             /**
-             * TracedConversation.ExportJSON()序列化后的状态
+             * TracedConversation 状态
              * @member
              * @type {string}
              */
@@ -171,7 +133,10 @@ export class ChatSessionDetail {
 
 /**
  * ChatSessionSummary 会话摘要，用于列表显示（不包含完整消息历史）
- * 用途：快速展示所有会话列表，避免加载完整的消息历史
+ * 
+ * 用途：
+ *   - 快速展示所有会话列表，避免加载完整的消息历史
+ *   - 在 UI 中显示会话卡片（标题、时间、预览）
  */
 export class ChatSessionSummary {
     /**
@@ -197,7 +162,7 @@ export class ChatSessionSummary {
         }
         if (/** @type {any} */(false)) {
             /**
-             * 书籍内容SHA1（仅book作用域）
+             * 书籍内容 SHA1（仅 book 作用域）
              * @member
              * @type {string | undefined}
              */
@@ -205,7 +170,7 @@ export class ChatSessionSummary {
         }
         if (/** @type {any} */(false)) {
             /**
-             * 书籍文件路径（仅book作用域）
+             * 书籍文件路径（仅 book 作用域）
              * @member
              * @type {string | undefined}
              */
@@ -221,7 +186,7 @@ export class ChatSessionSummary {
         }
         if (!("created_at" in $$source)) {
             /**
-             * RFC3339时间戳
+             * RFC3339 时间戳
              * @member
              * @type {string}
              */
@@ -245,7 +210,7 @@ export class ChatSessionSummary {
         }
         if (!("last_message_preview" in $$source)) {
             /**
-             * 最后一条消息的前80字符预览
+             * 最后一条消息的前 80 字符预览
              * @member
              * @type {string}
              */

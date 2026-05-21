@@ -14,7 +14,7 @@
  */
 
 import { ref, watch, onBeforeUnmount } from 'vue';
-import { BookService } from '../../../../bindings/hreader';
+import { BookService } from '../../../../bindings/hreader/services/book';
 
 export function useReadingProgress(bookPath, currentPage, readerRef) {
   // ========================================

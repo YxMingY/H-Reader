@@ -34,7 +34,7 @@
 //	  "provider": "aliyun",
 //	  "model": "qwen-turbo"
 //	}
-package main
+package config
 
 import (
 	"encoding/json"
