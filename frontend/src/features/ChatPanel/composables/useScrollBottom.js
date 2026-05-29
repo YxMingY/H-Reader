@@ -29,10 +29,23 @@ export function useScrollBottom() {
   const userScrolledAway = ref(false);
 
   /**
-   * 滚动阈值（像素）
-   * 当距离底部小于此值时，认为用户在"底部"
+   * 滚动阈值配置
+   * 使用容器高度按比例计算，再限制在合理区间内，避免不同设备上体感差异过大
    */
-  const SCROLL_THRESHOLD = 50;
+  const SCROLL_THRESHOLD_RATIO = 0.06;
+  const MIN_SCROLL_THRESHOLD = 20;
+  const MAX_SCROLL_THRESHOLD = 50;
+
+  /**
+   * 计算当前容器的底部判定阈值
+   * @param {HTMLElement} container - 滚动容器 DOM 元素
+   * @returns {number} 动态阈值（像素）
+   */
+  const getScrollThreshold = (container) => {
+    const clientHeight = container?.clientHeight || 0;
+    const threshold = Math.round(clientHeight * SCROLL_THRESHOLD_RATIO);
+    return Math.min(MAX_SCROLL_THRESHOLD, Math.max(MIN_SCROLL_THRESHOLD, threshold));
+  };
 
   // ========================================
   // 核心方法
@@ -50,7 +63,46 @@ export function useScrollBottom() {
     const { scrollTop, scrollHeight, clientHeight } = container;
     // 计算距离底部的距离
     const distanceToBottom = scrollHeight - scrollTop - clientHeight;
-    return distanceToBottom <= SCROLL_THRESHOLD;
+    return distanceToBottom <= getScrollThreshold(container);
+  };
+
+  /**
+   * 记录当前滚动位置
+   *
+   * @param {HTMLElement} container - 滚动容器 DOM 元素
+   * @returns {number} 当前滚动高度（scrollTop）
+   */
+  const captureScrollPosition = (container) => {
+    if (!container) return 0;
+
+    return Math.max(0, container.scrollTop || 0);
+  };
+
+  /**
+   * 恢复到指定滚动位置
+   *
+   * 用于重新加载消息后保持用户原先阅读的位置，而不是强制到底部。
+   *
+   * @param {HTMLElement} container - 滚动容器 DOM 元素
+   * @param {number} scrollTop - 需要恢复的滚动高度
+   */
+  const restoreScrollPosition = async (container, scrollTop) => {
+    if (!container || scrollTop === undefined || scrollTop === null) return;
+
+    await nextTick();
+
+    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+    const targetScrollTop = Math.min(Math.max(0, scrollTop), maxScrollTop);
+
+    container.scrollTop = targetScrollTop;
+
+    requestAnimationFrame(() => {
+      container.scrollTop = targetScrollTop;
+
+      requestAnimationFrame(() => {
+        container.scrollTop = targetScrollTop;
+      });
+    });
   };
 
   /**
@@ -154,6 +206,8 @@ export function useScrollBottom() {
     // 方法
     isAtBottom,
     handleScroll,
+    captureScrollPosition,
+    restoreScrollPosition,
     scrollToBottom,
     forceScrollToBottom,
     resetScrollState,

@@ -30,7 +30,7 @@
                 🛠️ 后续可在设置中更改模型提供商和具体模型。
               </p>
               <a 
-                href="https://help.aliyun.com/zh/model-studio/developer-reference/get-api-key" 
+                href="https://bailian.console.aliyun.com/cn-beijing?tab=model#/api-key" 
                 target="_blank"
                 class="info-link"
               >

@@ -101,7 +101,7 @@
     <div class="workspace-shell" :style="workspaceStyle" :class="{ 'chat-open': chatOpen }">
       <main class="main-content content-pane">
         <Bookshelf 
-          v-if="view === 'library'" 
+          v-show="view === 'library'" 
           ref="bookshelfRef"
           :has-api-key="!!apiKey"
           @select="openBook" 

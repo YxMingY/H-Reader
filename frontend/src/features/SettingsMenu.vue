@@ -6,7 +6,7 @@
           <div class="settings-header">
             <div>
               <h3 class="settings-title">设置</h3>
-              <p class="settings-subtitle">当前仅支持后端 API_KEY，后续会继续扩展。</p>
+              <p class="settings-subtitle">当前仅部分模型，后续会继续扩展。</p>
             </div>
             <button class="settings-close" type="button" @click="close" aria-label="关闭设置">×</button>
           </div>

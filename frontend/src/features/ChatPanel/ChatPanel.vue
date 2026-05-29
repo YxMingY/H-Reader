@@ -52,7 +52,7 @@
       :active-session-id="activeSessionId"
       :loading-sessions="loadingSessions"
       :error-message="errorMessage"
-      @load-session="loadSession"
+      @load-session="loadSessionAndScroll"
       @delete-session="deleteSession"
     />
 
@@ -100,7 +100,7 @@
  * - 使用 bookKey（文件哈希）而非 bookPath 标识书籍，避免路径变化导致会话丢失
  */
 
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { ChatService } from '../../../bindings/hreader/services/chat';
 import { useChatInput, useChatStream, useSession, useTools, useScrollBottom } from './composables';
 import { SessionList, MessageDisplay, InputArea } from './components';
@@ -188,6 +188,8 @@ const { renderMarkdown } = useTools();
 const {
   userScrolledAway,
   handleScroll,
+  captureScrollPosition,
+  restoreScrollPosition,
   scrollToBottom: smartScrollToBottom,
   forceScrollToBottom,
   resetScrollState,
@@ -202,6 +204,30 @@ const {
 const scrollToBottom = async () => {
   const container = messageDisplayRef.value?.messageViewportRef;
   await smartScrollToBottom(container);
+};
+
+/**
+ * 加载会话后显式滚动到底部
+ *
+ * 只在“进入会话”这类调用点使用，避免把滚动语义塞回 loadSession 内部。
+ */
+const loadSessionAndScroll = async (sessionId, options = {}) => {
+  await loadSession(sessionId, options);
+  await scrollToBottom();
+};
+
+/**
+ * 重新加载会话时保持用户当前阅读位置
+ *
+ * 适用于 AI 回复完成后刷新会话数据的场景，避免把用户强制拉到最底部。
+ */
+const loadSessionKeepingScroll = async (sessionId, options = {}) => {
+  const container = messageDisplayRef.value?.messageViewportRef;
+  const preservedScrollTop = captureScrollPosition(container);
+
+  await loadSession(sessionId, options);
+
+  await restoreScrollPosition(container, preservedScrollTop);
 };
 
 // ========================================
@@ -246,7 +272,7 @@ const {
   onStreamChunk,
   onStreamDone,
   onStreamError,
-} = useChatStream(activeSessionId, sending, messages, errorMessage, loadSession, refreshSessions, scrollToBottom, createSession, props, draft, attachments);
+} = useChatStream(activeSessionId, sending, messages, errorMessage, loadSessionKeepingScroll, refreshSessions, scrollToBottom, createSession, props, draft, attachments);
 
 
 

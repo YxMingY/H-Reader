@@ -17,7 +17,7 @@
  * @returns {Object} 会话管理相关的状态和方法
  */
 
-import { ref, watch, nextTick } from 'vue';
+import { ref } from 'vue';
 import { ChatService } from '../../../../bindings/hreader/services/chat';
 
 export function useSession(props, scopeTitle, scopeBookPath, errorMessage, scrollToBottom, resetScrollState, clearInput) {
@@ -74,19 +74,14 @@ const normalizeSessions = (result) => (Array.isArray(result) ? result : []);
  * - 用户点击"刷新"按钮
  * - 发送消息后同步最新状态
  */
-const refreshSessions = async () => {
+const refreshSessions = async (options = {}) => {
   loadingSessions.value = true;
   errorMessage.value = '';
   try {
     sessions.value = normalizeSessions(await ChatService.ListSessions(props.scopeType, scopeBookPath.value));
-    if (activeSessionId.value) {
-      const existing = sessions.value.find((item) => item.session_id === activeSessionId.value);
-      if (existing) {
-        await loadSession(existing.session_id, { keepSelection: true });
-      } else {
-        activeSessionId.value = '';
-        messages.value = [];
-      }
+    if (activeSessionId.value && !sessions.value.some((item) => item.session_id === activeSessionId.value)) {
+      activeSessionId.value = '';
+      messages.value = [];
     }
   } catch (err) {
     errorMessage.value = `加载会话失败：${err?.message || err}`;
@@ -118,7 +113,6 @@ const upsertSessionSummary = (summary) => {
  * 2. 设置活跃会话 ID
  * 3. 填充消息列表
  * 4. 更新会话列表中的摘要（除非是保持选中状态）
- * 5. 滚动到底部显示最新消息
  * 
  * @param {string} sessionId - 会话 ID
  * @param {Object} options - 可选参数
@@ -135,12 +129,7 @@ const loadSession = async (sessionId, options = {}) => {
     if (!options.keepSelection) {
       upsertSessionSummary(detail.summary);
     }
-    // 等待 DOM 更新完成
-    await nextTick();
-    // 重置滚动状态，确保进入新会话时能正常滚动
     resetScrollState();
-    // 滚动到最新消息底部
-    await scrollToBottom();
   } catch (err) {
     errorMessage.value = `加载对话失败：${err?.message || err}`;
   } finally {
@@ -226,46 +215,13 @@ const deleteSession = async (sessionId) => {
       messages.value = [];
       if (sessions.value.length > 0) {
         await loadSession(sessions.value[0].session_id, { keepSelection: true });
+        await scrollToBottom();
       }
     }
   } catch (err) {
     errorMessage.value = `删除会话失败：${err?.message || err}`;
   }
 };
-
-/**
- * 监听活跃会话变化
- * 
- * 触发条件：
- * - 用户点击会话列表项
- * - 创建新会话后自动进入
- * 
- * 目的：进入会话后立即滚动到底部，显示最新消息
- */
-watch(
-  () => activeSessionId.value,
-  async (sessionId) => {
-    if (!sessionId) return;
-    await scrollToBottom();
-  }
-);
-
-/**
- * 监听消息数量变化
- * 
- * 触发条件：
- * - 新增用户消息
- * - 新增 assistant 消息
- * - 加载历史消息
- * 
- * 目的：确保新消息出现时自动滚动到底部
- */
-watch(
-  () => messages.value.length,
-  async () => {
-    await scrollToBottom();
-  }
-);
 
 return {
   sessions,
