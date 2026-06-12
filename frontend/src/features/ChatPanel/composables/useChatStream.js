@@ -158,7 +158,7 @@ const sendMessage = async () => {
     attachments.value = [];
     
     // 步骤 7: 滚动到底部
-    await scrollToBottom();
+    await scrollToBottom(true);
 
     // 步骤 8: 调用后端流式 API
     await ChatService.SendMessageStreamInSession(

@@ -191,7 +191,7 @@ const {
   captureScrollPosition,
   restoreScrollPosition,
   scrollToBottom: smartScrollToBottom,
-  forceScrollToBottom,
+  forceScrollToBottom: smartForceScrollToBottom,
   resetScrollState,
 } = useScrollBottom();
 
@@ -201,8 +201,13 @@ const {
  * 调用 useScrollBottom composable 中的智能滚动方法
  * 自动获取消息容器并传递
  */
-const scrollToBottom = async () => {
+const scrollToBottom = async (force = false) => {
   const container = messageDisplayRef.value?.messageViewportRef;
+  if (force) {
+    await smartForceScrollToBottom(container);
+    return;
+  }
+
   await smartScrollToBottom(container);
 };
 
