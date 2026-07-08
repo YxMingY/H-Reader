@@ -283,6 +283,49 @@ func (c *ChatService) DeleteSession(scopeType, bookPath, sessionID string) error
 	return c.saveScopeIndex(scope, idx)
 }
 
+// UpdateSessionTitle 更新会话标题
+//
+// 参数：
+//   - scopeType: 作用域类型
+//   - bookPath:  书籍路径
+//   - sessionID: 会话 ID
+//   - title:     新的会话标题
+//
+// 流程：
+//  1. 加载会话数据
+//  2. 更新标题字段
+//  3. 原子性保存会话和索引
+//
+// 返回：
+//   - 错误信息（如果会话不存在或写入失败）
+func (c *ChatService) UpdateSessionTitle(scopeType, bookPath, sessionID, title string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	scope, err := c.resolveScope(scopeType, bookPath)
+	if err != nil {
+		return err
+	}
+
+	stored, err := c.loadStoredSession(scope, sessionID)
+	if err != nil {
+		return err
+	}
+
+	// 更新标题
+	stored.Title = strings.TrimSpace(title)
+	if stored.Title == "" {
+		stored.Title = "新会话"
+	}
+
+	// 持久化保存
+	if err := c.persistSession(scope, stored); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // SendMessageInSession 在指定会话中同步发送消息（阻塞直到 LLM 回复）
 //
 // 参数：
@@ -453,6 +496,19 @@ func (c *ChatService) SendMessageStreamInSession(scopeType, bookPath, sessionID,
 		)
 		stored.MessageCount = len(stored.Messages)
 		stored.LastMessagePreview = clippedPreview(full)
+
+		// 如果是会话的第一条消息（2条：user + assistant），自动提取标题
+		if stored.MessageCount == 2 {
+			// 检查是否应该自动设置标题：
+			// 1. 标题是默认的"新会话"
+			// 2. 标题是以"对话"结尾的自动生成标题（如"xxx 对话"）
+			shouldAutoTitle := strings.TrimSpace(stored.Title) == "新会话" ||
+				strings.HasSuffix(strings.TrimSpace(stored.Title), " 对话")
+
+			if shouldAutoTitle {
+				stored.Title = extractTitleFromFirstMessage(text)
+			}
+		}
 
 		if err := c.persistSession(scope, stored); err != nil {
 			_ = application.Get().Event.Emit("chat_stream_error", err.Error())

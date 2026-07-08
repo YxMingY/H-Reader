@@ -452,3 +452,47 @@ func clippedPreview(text string) string {
 	}
 	return trimmed[:80]
 }
+
+// extractTitleFromFirstMessage 从用户的第一条消息中提取会话标题
+//
+// 提取规则：
+//   - 取第一句话（以句号、问号、感叹号或换行符为界）
+//   - 最多保留 30 个字符
+//   - 如果消息过短，直接使用整个消息
+//
+// 参数：
+//   - message: 用户的消息文本
+//
+// 返回：
+//   - 提取的标题字符串
+func extractTitleFromFirstMessage(message string) string {
+	trimmed := strings.TrimSpace(message)
+	if trimmed == "" {
+		return "新会话"
+	}
+
+	// 查找第一个句子结束符（中文/英文标点或换行）
+	endIndex := len(trimmed)
+	for i, char := range trimmed {
+		if char == '。' || char == '？' || char == '！' || char == '.' || char == '?' || char == '!' || char == '\n' {
+			endIndex = i + 1
+			break
+		}
+	}
+
+	// 提取第一句话
+	firstSentence := trimmed[:endIndex]
+	firstSentence = strings.TrimSpace(firstSentence)
+
+	// 限制长度不超过 30 字符
+	if len(firstSentence) > 30 {
+		firstSentence = firstSentence[:30] + "..."
+	}
+
+	// 如果结果为空，使用默认值
+	if firstSentence == "" {
+		return "新会话"
+	}
+
+	return firstSentence
+}

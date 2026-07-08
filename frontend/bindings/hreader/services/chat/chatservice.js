@@ -334,6 +334,32 @@ export function SendMessageStreamInSession(scopeType, bookPath, sessionID, messa
     return $Call.ByID(192468181, scopeType, bookPath, sessionID, message, imagePaths);
 }
 
+/**
+ * UpdateSessionTitle 更新会话标题
+ * 
+ * 参数：
+ *   - scopeType: 作用域类型
+ *   - bookPath:  书籍路径
+ *   - sessionID: 会话 ID
+ *   - title:     新的会话标题
+ * 
+ * 流程：
+ *  1. 加载会话数据
+ *  2. 更新标题字段
+ *  3. 原子性保存会话和索引
+ * 
+ * 返回：
+ *   - 错误信息（如果会话不存在或写入失败）
+ * @param {string} scopeType
+ * @param {string} bookPath
+ * @param {string} sessionID
+ * @param {string} title
+ * @returns {$CancellablePromise<void>}
+ */
+export function UpdateSessionTitle(scopeType, bookPath, sessionID, title) {
+    return $Call.ByID(3073541448, scopeType, bookPath, sessionID, title);
+}
+
 // Private type creation functions
 const $$createType0 = $models.ChatSessionSummary.createFrom;
 const $$createType1 = $Create.Map($Create.Any, $Create.Any);

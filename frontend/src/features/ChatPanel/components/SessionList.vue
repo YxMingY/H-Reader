@@ -31,27 +31,65 @@
         role="button"
         tabindex="0"
         @click="loadSession(session.session_id)"
-        @keydown.enter.prevent="loadSession(session.session_id)"
-        @keydown.space.prevent="loadSession(session.session_id)"
       >
         <!-- 会话主要信息区 -->
         <div class="chat-session-main">
-          <div class="chat-session-title">{{ session.title }}</div>
+          <!-- 会话标题（支持内联编辑） -->
+          <div 
+            v-if="editingSessionId !== session.session_id"
+            class="chat-session-title"
+          >
+            {{ session.title }}
+          </div>
+          <input
+            v-else
+            :ref="(el) => setTitleInputRef(el, session.session_id)"
+            v-model="editingTitle"
+            class="chat-session-title-input"
+            type="text"
+            @blur="finishEditing(session.session_id)"
+            @keydown.enter="finishEditing(session.session_id)"
+            @keydown.esc="cancelEditing()"
+            @click.stop
+          />
           <!-- 会话元数据：消息数量和更新时间 -->
           <div class="chat-session-meta">
             <span>{{ session.message_count }} 条消息</span>
             <span>{{ session.updated_at }}</span>
           </div>
         </div>
-        <!-- 删除会话按钮（阻止事件冒泡，避免触发加载会话） -->
-        <button
-          class="chat-session-delete"
-          type="button"
-          title="删除会话"
-          @click.stop="deleteSession(session.session_id)"
-        >
-          ×
-        </button>
+        <!-- 操作菜单按钮 -->
+        <div class="chat-session-actions" @click.stop>
+          <button
+            class="chat-session-menu-btn"
+            type="button"
+            title="更多操作"
+            @click="toggleMenu(session.session_id, $event)"
+          >
+            ⋯
+          </button>
+          <!-- 下拉菜单 -->
+          <div
+            v-if="activeMenuId === session.session_id"
+            class="chat-session-menu"
+            @click.stop
+          >
+            <button
+              class="chat-menu-item"
+              type="button"
+              @click="startEditingFromMenu(session.session_id, session.title)"
+            >
+              编辑标题
+            </button>
+            <button
+              class="chat-menu-item chat-menu-item-danger"
+              type="button"
+              @click="deleteSession(session.session_id)"
+            >
+              删除会话
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -68,10 +106,11 @@
  * - 以列表形式展示所有可用会话
  * - 支持点击会话项加载对话内容
  * - 支持删除不需要的会话
+ * - 支持双击编辑会话标题
  * - 提供加载状态和空状态提示
  */
 
-
+import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue';
 
 // ========================================
 // Props 定义
@@ -108,8 +147,23 @@ const emit = defineEmits([
   /** 用户点击会话项时触发 */
   'load-session',
   /** 用户点击删除按钮时触发 */
-  'delete-session'
+  'delete-session',
+  /** 用户更新会话标题时触发 */
+  'update-session-title'
 ]);
+
+// ========================================
+// 响应式状态
+// ========================================
+
+/** 正在编辑的会话 ID */
+const editingSessionId = ref('');
+/** 编辑中的标题文本 */
+const editingTitle = ref('');
+/** 输入框引用映射（sessionId -> input element） */
+const titleInputRefs = new Map();
+/** 当前激活的菜单 ID */
+const activeMenuId = ref('');
 
 // ========================================
 // 事件处理函数
@@ -130,6 +184,108 @@ const loadSession = (sessionId) => {
 const deleteSession = (sessionId) => {
   emit('delete-session', sessionId);
 };
+
+/**
+ * 设置输入框引用（动态 ref）
+ * @param {HTMLElement|null} el - 输入框元素
+ * @param {string} sessionId - 会话 ID
+ */
+const setTitleInputRef = (el, sessionId) => {
+  if (el) {
+    titleInputRefs.set(sessionId, el);
+  } else {
+    titleInputRefs.delete(sessionId);
+  }
+};
+
+/**
+ * 开始编辑会话标题
+ * @param {string} sessionId - 会话 ID
+ * @param {string} currentTitle - 当前标题
+ */
+const startEditing = async (sessionId, currentTitle) => {
+  editingSessionId.value = sessionId;
+  editingTitle.value = currentTitle;
+  activeMenuId.value = ''; // 关闭菜单
+  
+  // 等待 DOM 更新后聚焦输入框
+  await nextTick();
+  const inputEl = titleInputRefs.get(sessionId);
+  if (inputEl) {
+    inputEl.focus();
+    inputEl.select();
+  }
+};
+
+/**
+ * 从菜单中开始编辑（包装函数）
+ * @param {string} sessionId - 会话 ID
+ * @param {string} currentTitle - 当前标题
+ */
+const startEditingFromMenu = (sessionId, currentTitle) => {
+  startEditing(sessionId, currentTitle);
+};
+
+/**
+ * 切换菜单显示状态
+ * @param {string} sessionId - 会话 ID
+ * @param {Event} event - 点击事件
+ */
+const toggleMenu = (sessionId, event) => {
+  event.stopPropagation();
+  if (activeMenuId.value === sessionId) {
+    activeMenuId.value = '';
+  } else {
+    activeMenuId.value = sessionId;
+  }
+};
+
+/**
+ * 完成编辑并保存
+ * @param {string} sessionId - 会话 ID
+ */
+const finishEditing = (sessionId) => {
+  const newTitle = editingTitle.value.trim();
+  if (newTitle && newTitle !== props.sessions.find(s => s.session_id === sessionId)?.title) {
+    emit('update-session-title', sessionId, newTitle);
+  }
+  cancelEditing();
+};
+
+/**
+ * 取消编辑
+ */
+const cancelEditing = () => {
+  editingSessionId.value = '';
+  editingTitle.value = '';
+};
+
+/**
+ * 点击外部关闭菜单
+ */
+const handleClickOutside = (event) => {
+  if (!event.target.closest('.chat-session-actions')) {
+    activeMenuId.value = '';
+  }
+};
+
+// ========================================
+// 生命周期钩子
+// ========================================
+
+/**
+ * 组件挂载时添加全局点击监听器
+ */
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+});
+
+/**
+ * 组件卸载前移除事件监听器
+ */
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside);
+});
 </script>
 
 <style scoped>
@@ -206,6 +362,18 @@ const deleteSession = (sessionId) => {
   text-overflow: ellipsis;
 }
 
+.chat-session-title-input {
+  width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border: 1px solid rgba(0, 122, 204, 0.4);
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.95);
+  outline: none;
+}
+
 .chat-session-meta {
   margin-top: 6px;
   display: flex;
@@ -226,6 +394,75 @@ const deleteSession = (sessionId) => {
   font-size: 20px;
   line-height: 1;
   padding: 0;
+}
+
+/* 操作按钮容器 */
+.chat-session-actions {
+  position: relative;
+  flex: 0 0 24px;
+}
+
+/* 菜单按钮 */
+.chat-session-menu-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.chat-session-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* 下拉菜单 */
+.chat-session-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 120px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+/* 菜单项 */
+.chat-menu-item {
+  width: 100%;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.chat-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* 危险操作（删除） */
+.chat-menu-item-danger {
+  color: #dc2626;
+}
+
+.chat-menu-item-danger:hover {
+  background: rgba(220, 38, 38, 0.05);
 }
 
 .chat-empty.compact {

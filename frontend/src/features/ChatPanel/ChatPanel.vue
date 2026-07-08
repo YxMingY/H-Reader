@@ -54,6 +54,7 @@
       :error-message="errorMessage"
       @load-session="loadSessionAndScroll"
       @delete-session="deleteSession"
+      @update-session-title="updateSessionTitle"
     />
 
     <!-- 会话详情视图：当有活跃会话时显示 -->
@@ -265,7 +266,8 @@ const {
   createSession, 
   createSessionAndEnter, 
   backToSessions, 
-  deleteSession 
+  deleteSession,
+  updateSessionTitle
 } = useSession(props, scopeTitle, scopeBookPath, errorMessage, scrollToBottom, resetScrollState, clearInput);
 
 /** 流式响应管理：处理后端推送的实时消息更新 */

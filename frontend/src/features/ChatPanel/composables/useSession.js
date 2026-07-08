@@ -223,6 +223,32 @@ const deleteSession = async (sessionId) => {
   }
 };
 
+/**
+ * 更新会话标题
+ * 
+ * 流程：
+ * 1. 调用后端 API 更新标题
+ * 2. 更新本地列表中的会话摘要
+ * 3. 如果当前正在查看该会话，也更新其摘要
+ * 
+ * @param {string} sessionId - 会话 ID
+ * @param {string} newTitle - 新的会话标题
+ */
+const updateSessionTitle = async (sessionId, newTitle) => {
+  errorMessage.value = '';
+  try {
+    await ChatService.UpdateSessionTitle(props.scopeType, scopeBookPath.value, sessionId, newTitle);
+    
+    // 更新本地列表
+    const index = sessions.value.findIndex(item => item.session_id === sessionId);
+    if (index !== -1) {
+      sessions.value[index].title = newTitle;
+    }
+  } catch (err) {
+    errorMessage.value = `更新标题失败：${err?.message || err}`;
+  }
+};
+
 return {
   sessions,
   activeSessionId,
@@ -235,6 +261,7 @@ return {
   createSessionAndEnter,
   backToSessions,
   deleteSession,
+  updateSessionTitle,
 }
 
 
