@@ -98,6 +98,22 @@ export function useScaleAdjust(
         resizeTimeout = setTimeout(() => {
             //if (props.pdfSource && pdfDoc.value) {
                 FitWidth();
+                
+                // 窗口大小改变后，等待 DOM 更新完成，然后将横向滚动条居中
+                setTimeout(() => {
+                    if (readerContainer.value) {
+                        const container = readerContainer.value;
+                        const scrollWidth = container.scrollWidth;
+                        const clientWidth = container.clientWidth;
+                        
+                        // 只有当内容宽度大于容器宽度时才需要滚动
+                        if (scrollWidth > clientWidth) {
+                            // 计算居中位置：(总滚动宽度 - 可视宽度) / 2
+                            const centerScrollLeft = (scrollWidth - clientWidth) / 2;
+                            container.scrollLeft = centerScrollLeft;
+                        }
+                    }
+                }, 100); // 等待 100ms 确保页面重新渲染完成
             //}
         }, 200);
     };

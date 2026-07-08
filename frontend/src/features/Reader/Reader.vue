@@ -255,15 +255,14 @@ defineExpose({
   overflow-y: auto;
   overflow-x: auto; /* 允许左右滚动缩放后的内容 */
   background: #525659;
-  display: flex;
-  justify-content: center; /* 居中显示 */
+  display: block; /* 改为 block，避免 flex 布局导致的居中问题 */
   padding: 20px;
 }
 
 .pdf-canvas-container {
-  display: flex;
+  display: inline-flex; /* 改为 inline-flex，让容器宽度根据内容自适应 */
   flex-direction: column;
-  align-items: center;
-  min-width: 0;
+  align-items: center; /* 保持页面水平居中 */
+  min-width: 100%; /* 确保容器至少占满整个视口宽度 */
 }
 </style>
