@@ -265,7 +265,7 @@ const toggleChatPanel = () => {
     } else {
       syncChatWidth();
     }
-    // 只有当聊天面板实际宽度没有超过 30% 时，才自动调用 Reader 的 fitWidth。
+    // 只有当聊天面板实际宽度没有超过 33% 时，才自动调用 Reader 的 fitWidth。
     const viewportWidth = getViewportWidth();
     const shouldAutoFitReader =
       view.value === 'reader' &&

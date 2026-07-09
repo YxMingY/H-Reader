@@ -1,4 +1,4 @@
-import { ref, onMounted, onBeforeUnmount } from "vue";
+import { ref, onMounted, onBeforeUnmount, nextTick } from "vue";
 
 /**
  * useScaleAdjust - 页面缩放管理 Composable
@@ -32,6 +32,13 @@ export function useScaleAdjust(
         if (clamped === pageWidth.value) return;
         pageWidth.value = clamped;
         RerenderVisiblePages();
+        // 窗口大小改变后，若页面宽度小于等于容器宽度，则将横向滚动条居中
+        if(nextWidth <= readerContainer.value.clientWidth) {
+            nextTick();
+            setTimeout(() => {
+                scrollToCenter();
+            }, 100); // 等待 100ms 确保页面重新渲染完成
+        }
         // emit('rescale', clamped);
     };
 
@@ -50,6 +57,21 @@ export function useScaleAdjust(
     const ZoomOut = () => {
         // 缩小按钮与滚轮向下共用同一套缩放步长。
         SetPageWidth(pageWidth.value / ZOOM_STEP);
+    };
+
+    const scrollToCenter = () => {
+        if (readerContainer.value) {
+            const container = readerContainer.value;
+            const scrollWidth = container.scrollWidth;
+            const clientWidth = container.clientWidth;
+            
+            // 只有当内容宽度大于容器宽度时才需要滚动
+            if (scrollWidth > clientWidth) {
+                // 计算居中位置：(总滚动宽度 - 可视宽度) / 2
+                const centerScrollLeft = (scrollWidth - clientWidth) / 2;
+                container.scrollLeft = centerScrollLeft;
+            }
+        }
     };
     
     /**
@@ -98,22 +120,6 @@ export function useScaleAdjust(
         resizeTimeout = setTimeout(() => {
             //if (props.pdfSource && pdfDoc.value) {
                 FitWidth();
-                
-                // 窗口大小改变后，等待 DOM 更新完成，然后将横向滚动条居中
-                setTimeout(() => {
-                    if (readerContainer.value) {
-                        const container = readerContainer.value;
-                        const scrollWidth = container.scrollWidth;
-                        const clientWidth = container.clientWidth;
-                        
-                        // 只有当内容宽度大于容器宽度时才需要滚动
-                        if (scrollWidth > clientWidth) {
-                            // 计算居中位置：(总滚动宽度 - 可视宽度) / 2
-                            const centerScrollLeft = (scrollWidth - clientWidth) / 2;
-                            container.scrollLeft = centerScrollLeft;
-                        }
-                    }
-                }, 100); // 等待 100ms 确保页面重新渲染完成
             //}
         }, 200);
     };
