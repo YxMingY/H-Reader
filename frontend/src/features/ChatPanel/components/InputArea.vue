@@ -25,7 +25,7 @@
       :value="draft"
       class="chat-input"
       rows="3"
-      placeholder="输入文本，或直接粘贴截图（Ctrl+V）"
+      placeholder="输入文本，或直接粘贴截图（Ctrl+V）&#13;&#10;快捷发送（Ctrl+Enter）， 快捷截图（Ctrl+Q）"
       @input="(e) => { $emit('update:draft', e.target.value); clearErrorOnInput(); }"
       @keydown.meta.enter.prevent="sendMessage"
       @keydown.ctrl.enter.prevent="sendMessage"

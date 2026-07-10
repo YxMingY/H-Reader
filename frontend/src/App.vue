@@ -291,8 +291,27 @@ onMounted(() => {
   window.addEventListener('resize', syncChatWidth);
 });
 
+// 键盘事件处理函数（需要在 onBeforeUnmount 中引用）
+const handleKeyDown = (event) => {
+  // 检查是否是 Ctrl+Q（Mac 上是 Cmd+Q）
+  if ((event.ctrlKey || event.metaKey) && event.key === 'q') {
+    // 只有在阅读器视图时才生效
+    if (view.value === 'reader') {
+      event.preventDefault();
+      console.log('触发框选截图快捷键');
+      startAreaSelection();
+    }
+  }
+};
+
+// 在组件挂载后添加键盘事件监听
+nextTick(() => {
+  document.addEventListener('keydown', handleKeyDown);
+});
+
 onBeforeUnmount(() => {
   window.removeEventListener('resize', syncChatWidth);
+  document.removeEventListener('keydown', handleKeyDown);
   cleanupChatPanel();
 });
 
