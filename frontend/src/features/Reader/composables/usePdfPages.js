@@ -21,6 +21,7 @@ export function usePdfPages(
 
     const renderingPages = ref(new Set()); // 正在渲染的页码集合，避免重复渲染
     const currentPages = ref(new Set());   // 当前可见的页码集合
+    const renderTasks = new Map();         // 存储每个页面的渲染任务，用于取消
 
     const pageWidth = ref(600); // 统一管理页面宽度，所有缩放路径都通过修改它来触发重新渲染
 
@@ -76,7 +77,7 @@ export function usePdfPages(
         // 高分辨率渲染（考虑 devicePixelRatio）
         // devicePixelRatio 是一个表示设备像素与CSS像素之间关系的值。对于普通屏幕，这个值通常是1；
         // 对于高DPI屏幕（如Retina显示屏），这个值可能是2或更高。这意味着在高DPI屏幕上，每个CSS像素实际上由多个物理像素组成。
-        const outputScale = window.devicePixelRatio || 1;
+        const outputScale = (window.devicePixelRatio || 1) * 1.2;
         return { viewport, outputScale };
     };
 
@@ -132,6 +133,16 @@ export function usePdfPages(
                 return;
             }
 
+            // ⚠️ 关键修复：如果存在之前的渲染任务，先取消它
+            if (renderTasks.has(pageNum)) {
+                const previousTask = renderTasks.get(pageNum);
+                if (previousTask && typeof previousTask.cancel === 'function') {
+                    console.log(`取消第 ${pageNum} 页的旧渲染任务`);
+                    previousTask.cancel();
+                }
+                renderTasks.delete(pageNum);
+            }
+
             // 计算页面视口和输出缩放比例
             const { viewport, outputScale } = computePageViewport(page);
             console.log(viewport);
@@ -145,6 +156,11 @@ export function usePdfPages(
 
             // context.setTransform()方法用于设置当前的变换矩阵。通过将outputScale应用于x和y轴，我们确保了在高DPI屏幕上渲染的内容被正确缩放，从而保持清晰度。
             const context = canvas.getContext('2d');
+            
+            // ⚠️ 关键修复：在设置新的 transform 之前，先重置为默认状态
+            // 避免多次渲染时 transform 累积导致的问题（如文字倒置）
+            context.setTransform(1, 0, 0, 1, 0, 0);
+            
             // context.setTransform()的函数原型是：context.setTransform(a, b, c, d, e, f)，其中a、b、c、d、e、f分别对应变换矩阵的元素。通过将outputScale应用于a和d，我们实现了在x和y轴上的缩放。
             // 即，canvas.width和canvas.height调整了画布大小，而context.setTransform()确保了绘制的内容按照正确的比例缩放，从而在高DPI屏幕上保持清晰。
             context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
@@ -156,8 +172,11 @@ export function usePdfPages(
             }; 
 
             console.log('开始渲染页面内容');
-            // 执行页面渲染并等待完成
-            await page.render(renderContext).promise;
+            // 执行页面渲染并等待完成，保存任务引用以便后续取消
+            const renderTask = page.render(renderContext);
+            renderTasks.set(pageNum, renderTask); // 存储渲染任务
+            await renderTask.promise;
+            renderTasks.delete(pageNum); // 渲染完成后清除任务引用
 
             // 渲染完成后再回写容器高度，防止页面之间重叠
             if (pageContainer) {
@@ -176,10 +195,14 @@ export function usePdfPages(
 
             console.log(`第 ${pageNum} 页渲染完成`);
         } catch (err) {
-            console.error(`渲染第 ${pageNum} 页失败:`, err);
+            // 如果是取消操作导致的错误，静默处理
+            if (err.name !== 'RenderingCancelledException') {
+                console.error(`渲染第 ${pageNum} 页失败:`, err);
+            }
         } finally {
             // 从正在渲染集合中移除该页面
             renderingPages.value.delete(pageNum);
+            renderTasks.delete(pageNum); // 确保清除任务引用
         }
     };
 
@@ -272,8 +295,18 @@ export function usePdfPages(
     renderTimeout = setTimeout(() => {
         console.log('重新渲染可见页面:', Array.from(currentPages.value));
         currentPages.value.forEach(pageNum => {
-        renderingPages.value.delete(pageNum);
-        RenderPage(pageNum);
+            // ⚠️ 关键修复：先取消正在进行的渲染任务，再标记为未渲染
+            if (renderTasks.has(pageNum)) {
+                const task = renderTasks.get(pageNum);
+                if (task && typeof task.cancel === 'function') {
+                    console.log(`取消第 ${pageNum} 页的渲染任务以进行重新渲染`);
+                    task.cancel();
+                }
+                renderTasks.delete(pageNum);
+            }
+            
+            renderingPages.value.delete(pageNum);
+            RenderPage(pageNum);
         });
     }, RENDER_THROTTLE);
     };
@@ -281,6 +314,15 @@ export function usePdfPages(
     onBeforeUnmount(() => {
         if (pageObserver) pageObserver.disconnect();
         if (renderTimeout) clearTimeout(renderTimeout);
+        
+        // ⚠️ 清理所有正在进行的渲染任务
+        renderTasks.forEach((task, pageNum) => {
+            if (task && typeof task.cancel === 'function') {
+                console.log(`清理第 ${pageNum} 页的渲染任务`);
+                task.cancel();
+            }
+        });
+        renderTasks.clear();
     });
 
     return {

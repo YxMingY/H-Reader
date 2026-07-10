@@ -16,7 +16,7 @@ export function useScaleAdjust(
     emit,                 // 事件发射器
 ) {
     const MIN_PAGE_WIDTH = 200;   // 最小页面宽度（像素）
-    const MAX_PAGE_WIDTH = 2400;  // 最大页面宽度（像素）
+    const MAX_PAGE_WIDTH = 4800;  // 最大页面宽度（像素）
     const ZOOM_STEP = 1.1;        // 缩放步长（10%）
 
     let resizeTimeout = null;  // 窗口调整节流定时器
