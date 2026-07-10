@@ -309,6 +309,19 @@ const handleReaderClick = async (event) => {
 };
 
 /**
+ * 处理右键菜单（在选择模式下取消）
+ */
+const handleReaderContextMenu = (event) => {
+  if (!isSelectingMode.value) return;
+  
+  // 阻止默认右键菜单
+  event.preventDefault();
+  
+  console.log('右键取消选择模式');
+  cancelSelectionMode();
+};
+
+/**
  * 处理删除大头针
  */
 const handleRemoveAnnotation = async (annotationId) => {
@@ -336,8 +349,25 @@ const getPageAnnotations = (pageNum) => {
 const getPageHeight = (pageNum) => {
   const canvas = pageCanvasRefs[pageNum];
   if (canvas) {
-    // 使用 canvas 的显示高度（style.height）
-    return canvas.offsetHeight || canvas.style.height || (pageWidth.value * 1.4);
+    // 优先使用 canvas 的实际渲染尺寸
+    // 如果 canvas 已经有 style.width 和 style.height，说明已经渲染过
+    const styleWidth = canvas.style.width;
+    const styleHeight = canvas.style.height;
+    
+    if (styleWidth && styleHeight && styleWidth.endsWith('px') && styleHeight.endsWith('px')) {
+      const width = parseFloat(styleWidth);
+      const height = parseFloat(styleHeight);
+      
+      // 根据当前 pageWidth 和已知的宽高比重新计算高度
+      // 这样可以确保在缩放时高度正确更新
+      if (width > 0) {
+        const aspectRatio = height / width;
+        return pageWidth.value * aspectRatio;
+      }
+    }
+    
+    // 降级方案：根据 pageWidth 和默认比例计算
+    return pageWidth.value * 1.4;
   }
   return pageWidth.value * 1.4; // 默认 A4 比例
 };
@@ -370,10 +400,11 @@ defineExpose({
     ref="readerContainer"
     :class="{ 'selection-mode': isSelectingMode }"
     @click="handleReaderClick"
+    @contextmenu="handleReaderContextMenu"
   >
     <!-- 选择模式提示 -->
     <div v-if="isSelectingMode" class="selection-mode-hint">
-      👆 请点击 PDF 页面放置大头针（点击空白处取消）
+      👆 左键点击 PDF 页面放置大头针，右键取消
     </div>
     
     <div class="pdf-canvas-container" ref="pdfCanvas">

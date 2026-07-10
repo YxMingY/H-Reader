@@ -44,8 +44,9 @@ export function useAnnotations(bookPathRef, currentPage, emitNavigateToMessage) 
      * @param {number} messageIndex - 消息在会话中的索引位置
      * @param {number} pageWidth - 当前页面宽度（用于归一化）
      * @param {number} pageHeight - 当前页面高度（用于归一化）
+     * @param {string} messagePreview - 消息内容预览（可选）
      */
-    const addAnnotation = async (pageNum, x, y, sessionId, messageIndex, pageWidth, pageHeight) => {
+    const addAnnotation = async (pageNum, x, y, sessionId, messageIndex, pageWidth, pageHeight, messagePreview = '') => {
         if (!bookPathRef.value) {
             console.warn('无法添加大头针：bookPath 为空');
             return;
@@ -63,7 +64,7 @@ export function useAnnotations(bookPathRef, currentPage, emitNavigateToMessage) 
             x: normalizedX,
             y: normalizedY,
             createdAt: Date.now(),
-            note: ''
+            note: messagePreview || '' // 使用消息预览作为备注
         };
 
         try {
@@ -120,11 +121,12 @@ export function useAnnotations(bookPathRef, currentPage, emitNavigateToMessage) 
     /**
      * 开始选择模式（等待用户点击 PDF）
      * @param {string} sessionId - 会话 ID
-     * @param {string} messageId - 消息 ID
+     * @param {number} messageIndex - 消息索引
+     * @param {string} messagePreview - 消息内容预览（可选）
      */
-    const startSelectionMode = (sessionId, messageId) => {
+    const startSelectionMode = (sessionId, messageIndex, messagePreview = '') => {
         isSelectingMode.value = true;
-        pendingAnnotationData = { sessionId, messageId };
+        pendingAnnotationData = { sessionId, messageIndex, messagePreview };
         console.log('进入大头针选择模式，请点击 PDF 页面');
     };
 
@@ -155,9 +157,10 @@ export function useAnnotations(bookPathRef, currentPage, emitNavigateToMessage) 
                 clickX,
                 clickY,
                 pendingAnnotationData.sessionId,
-                pendingAnnotationData.messageId,
+                pendingAnnotationData.messageIndex,
                 pageWidth,
-                pageHeight
+                pageHeight,
+                pendingAnnotationData.messagePreview // 传递消息预览
             );
 
             // 退出选择模式

@@ -61,10 +61,26 @@ onBeforeUnmount(() => {
  * 计算大头针的实际像素坐标
  */
 const getPinPosition = (annotation) => {
+  // 直接使用 props.pageWidth 和 props.pageHeight
+  // 这两个值是响应式的，会随缩放正确更新
+  const pixelX = annotation.x * props.pageWidth;
+  const pixelY = annotation.y * props.pageHeight;
+  
+  
   return {
-    x: annotation.x * props.pageWidth,
-    y: annotation.y * props.pageHeight
+    x: pixelX,
+    y: pixelY
   };
+};
+
+/**
+ * 计算大头针图标的缩放比例
+ * 基于当前页面宽度与标准宽度（732px）的比例
+ */
+const getPinScale = () => {
+  const standardWidth = 732; // 标准页面宽度（首次渲染时的宽度）
+  const scale = Math.max(0.5, Math.min(2.0, props.pageWidth / standardWidth));
+  return scale;
 };
 
 /**
@@ -94,6 +110,7 @@ const handlePinRemove = (annotationId) => {
       :annotation="annotation"
       :x="getPinPosition(annotation).x"
       :y="getPinPosition(annotation).y"
+      :scale="getPinScale()"
       @dblclick="handlePinDoubleClick"
       @remove="handlePinRemove"
     />

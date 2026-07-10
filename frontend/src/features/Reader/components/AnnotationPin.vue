@@ -23,6 +23,10 @@ const props = defineProps({
         type: Number,
         required: true, // Y 坐标（像素）
     },
+    scale: {
+        type: Number,
+        default: 1, // 缩放比例
+    },
 });
 
 // 定义组件事件
@@ -65,18 +69,21 @@ const handleContextMenu = (event) => {
 <template>
     <div
         class="annotation-pin"
-        :style="{ left: x + 'px', top: y + 'px' }"
+        :style="{ 
+            left: x + 'px', 
+            top: y + 'px'
+        }"
         @dblclick="handleDoubleClick"
         @contextmenu="handleContextMenu"
         @mouseenter="isHovered = true"
         @mouseleave="isHovered = false"
     >
         <!-- 大头针图标 -->
-        <div class="pin-icon">📌</div>
+        <div class="pin-icon" :style="{ fontSize: (12 * scale) + 'px' }">📌</div>
         
         <!-- Hover 提示框 -->
         <div v-if="isHovered" class="pin-tooltip">
-            <div class="tooltip-title">AI 对话标记</div>
+            <div class="tooltip-title">{{ annotation.note || 'AI 对话标记' }}</div>
             <div class="tooltip-info">双击跳转到对话</div>
             <div class="tooltip-info">右键删除标记</div>
         </div>
@@ -89,17 +96,18 @@ const handleContextMenu = (event) => {
     z-index: 100;
     cursor: pointer;
     transform: translate(-50%, -50%); /* 居中定位 */
-    transition: transform 0.2s ease;
+    transition: filter 0.2s ease;
 }
 
 .annotation-pin:hover {
-    transform: translate(-50%, -50%) scale(1.2);
+    filter: brightness(1.2) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
 }
 
 .pin-icon {
-    font-size: 24px;
+    font-size: 8px;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
     user-select: none;
+    opacity: 0.7;
 }
 
 .pin-tooltip {

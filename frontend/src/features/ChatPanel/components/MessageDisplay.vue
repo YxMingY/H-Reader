@@ -249,8 +249,17 @@ const startPinMode = (messageIndex) => {
     return;
   }
   
-  console.log('启动大头针选择模式，消息索引:', messageIndex);
-  props.readerRef.startSelectionMode(props.sessionId, messageIndex);
+  // 获取消息内容预览（前 20 个字）
+  const message = props.messages[messageIndex];
+  let messagePreview = '';
+  if (message && message.content) {
+    // 提取前 20 个字符，如果超过则添加省略号
+    const content = message.content.trim();
+    messagePreview = content.length > 20 ? content.substring(0, 20) + '...' : content;
+  }
+  
+  console.log('启动大头针选择模式，消息索引:', messageIndex, '预览:', messagePreview);
+  props.readerRef.startSelectionMode(props.sessionId, messageIndex, messagePreview);
 };
 
 /**
