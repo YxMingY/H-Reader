@@ -31,6 +31,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(&GreetService{}),
 			application.NewService(&book.BookService{}),
+			application.NewService(&book.AnnotationService{}),
 			application.NewService(chat.NewChatService()),
 		},
 		Assets: application.AssetOptions{

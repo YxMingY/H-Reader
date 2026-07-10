@@ -7,6 +7,94 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
+ * Annotation 大头针数据结构
+ */
+export class Annotation {
+    /**
+     * Creates a new Annotation instance.
+     * @param {Partial<Annotation>} [$$source = {}] - The source object to create the Annotation.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * 唯一标识
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("sessionId" in $$source)) {
+            /**
+             * 关联的会话 ID
+             * @member
+             * @type {string}
+             */
+            this["sessionId"] = "";
+        }
+        if (!("messageIndex" in $$source)) {
+            /**
+             * 消息在会话中的索引位置
+             * @member
+             * @type {number}
+             */
+            this["messageIndex"] = 0;
+        }
+        if (!("pageNum" in $$source)) {
+            /**
+             * PDF 页码
+             * @member
+             * @type {number}
+             */
+            this["pageNum"] = 0;
+        }
+        if (!("x" in $$source)) {
+            /**
+             * X 坐标（归一化，0-1）
+             * @member
+             * @type {number}
+             */
+            this["x"] = 0;
+        }
+        if (!("y" in $$source)) {
+            /**
+             * Y 坐标（归一化，0-1）
+             * @member
+             * @type {number}
+             */
+            this["y"] = 0;
+        }
+        if (!("createdAt" in $$source)) {
+            /**
+             * 创建时间戳
+             * @member
+             * @type {number}
+             */
+            this["createdAt"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * 可选的备注文字
+             * @member
+             * @type {string | undefined}
+             */
+            this["note"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Annotation instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Annotation}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Annotation(/** @type {Partial<Annotation>} */($$parsedSource));
+    }
+}
+
+/**
  * BookInfo 书籍信息结构
  */
 export class BookInfo {

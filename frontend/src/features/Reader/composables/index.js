@@ -17,3 +17,6 @@ export { useScreenshot } from './useScreenshot'
 
 // 阅读进度管理
 export { useReadingProgress } from './useReadingProgress'
+
+// 大头针标注管理
+export { useAnnotations } from './useAnnotations'

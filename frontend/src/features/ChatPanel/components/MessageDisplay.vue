@@ -45,6 +45,16 @@
           <!-- 文本内容 -->
           <div v-if="message.content" class="chat-message-content">{{ message.content }}</div>
         </div>
+        
+        <!-- 📌 标记位置按钮（仅在有 readerRef 时显示） -->
+        <button
+          v-if="readerRef"
+          class="pin-button"
+          @click="startPinMode(index)"
+          title="在 PDF 中标记此对话的位置"
+        >
+          📌 标记位置
+        </button>
       </div>
     </div>
   </div>
@@ -83,6 +93,16 @@ const props = defineProps({
   renderMarkdown: {
     type: Function,
     required: true
+  },
+  /** Reader 组件引用（用于调用 startSelectionMode） */
+  readerRef: {
+    type: Object,
+    default: null
+  },
+  /** 当前会话 ID */
+  sessionId: {
+    type: String,
+    default: ''
   }
 });
 
@@ -219,13 +239,78 @@ const handleScroll = (event) => {
   emit('scroll', event);
 };
 
+/**
+ * 开始大头针选择模式
+ * @param {number} messageIndex - 消息索引
+ */
+const startPinMode = (messageIndex) => {
+  if (!props.readerRef || !props.sessionId) {
+    console.warn('无法启动大头针模式：缺少 readerRef 或 sessionId');
+    return;
+  }
+  
+  console.log('启动大头针选择模式，消息索引:', messageIndex);
+  props.readerRef.startSelectionMode(props.sessionId, messageIndex);
+};
+
+/**
+ * 滚动到指定消息（通过索引）
+ * @param {number} messageIndex - 消息索引
+ */
+const scrollToMessage = (messageIndex) => {
+  if (!messageViewportRef.value) {
+    console.warn('无法滚动到消息：视口引用不存在');
+    return;
+  }
+  
+  const viewport = messageViewportRef.value;
+  
+  // 等待 DOM 更新完成
+  setTimeout(() => {
+    // 找到目标消息元素
+    const messageElements = viewport.querySelectorAll('.chat-message');
+    if (messageIndex >= messageElements.length) {
+      console.warn('消息元素不存在', { messageIndex, elementCount: messageElements.length });
+      return;
+    }
+    
+    const targetElement = messageElements[messageIndex];
+    if (!targetElement) {
+      console.warn('目标消息元素不存在');
+      return;
+    }
+    
+    // 计算滚动位置，将消息滚动到视口中间
+    const elementTop = targetElement.offsetTop;
+    const elementHeight = targetElement.offsetHeight;
+    const viewportHeight = viewport.clientHeight;
+    const scrollTop = elementTop - (viewportHeight / 2) + (elementHeight / 2);
+    
+    // 直接滚动（不使用平滑效果）
+    viewport.scrollTo({
+      top: scrollTop,
+      behavior: 'auto'
+    });
+    
+    console.log('已滚动到消息索引:', messageIndex, '滚动位置:', scrollTop);
+    
+    // 添加高亮效果（可选）
+    targetElement.classList.add('highlighted-message');
+    setTimeout(() => {
+      targetElement.classList.remove('highlighted-message');
+    }, 2000);
+  }, 50); // 短暂延迟确保 DOM 完全渲染
+};
+
 // ========================================
 // 公开 API
 // ========================================
 
 defineExpose({
   /** 消息滚动容器 DOM 引用 */
-  messageViewportRef
+  messageViewportRef,
+  /** 滚动到指定消息（通过索引） */
+  scrollToMessage
 });
 
 // ========================================
@@ -487,5 +572,54 @@ onBeforeUnmount(() => {
   padding: 20px;
   font-size: 13px;
   line-height: 1.6;
+}
+
+/* ========================================
+   📌 大头针标记按钮样式
+   ======================================== */
+
+.pin-button {
+  margin-top: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: #666;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pin-button:hover {
+  background: rgba(0, 0, 0, 0.1);
+  border-color: rgba(0, 0, 0, 0.2);
+  color: #333;
+}
+
+.pin-button:active {
+  transform: scale(0.95);
+}
+
+/* 📌 大头针导航高亮效果 */
+.highlighted-message {
+  animation: highlight-pulse 2s ease-in-out;
+  border: 2px solid #007acc;
+  border-radius: 8px;
+  box-shadow: 0 0 12px rgba(0, 122, 204, 0.3);
+}
+
+@keyframes highlight-pulse {
+  0% {
+    background-color: rgba(0, 122, 204, 0.2);
+  }
+  50% {
+    background-color: rgba(0, 122, 204, 0.1);
+  }
+  100% {
+    background-color: transparent;
+  }
 }
 </style>

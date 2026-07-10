@@ -5,9 +5,11 @@
  * 该组件负责创建单个 PDF 页面的 DOM 结构，包括：
  * - Canvas 元素用于渲染 PDF 内容
  * - 文本层用于支持文本选择和复制
+ * - 大头针标注显示
  * - 向父组件注册 DOM 引用以便管理
  */
 import { ref, onMounted, onBeforeUnmount } from 'vue';
+import AnnotationPin from './AnnotationPin.vue';
 
 // 定义组件属性
 const props = defineProps({
@@ -19,7 +21,22 @@ const props = defineProps({
     type: Function,
     required: true, // 注册函数，用于向父组件注册 DOM 引用
   },
+  annotations: {
+    type: Array,
+    default: () => [], // 当前页的大头针列表
+  },
+  pageWidth: {
+    type: Number,
+    default: 600, // 页面宽度
+  },
+  pageHeight: {
+    type: Number,
+    default: 840, // 页面高度（默认 A4 比例）
+  },
 });
+
+// 定义组件事件
+const emit = defineEmits(['pin-dblclick', 'pin-remove']);
 
 // DOM 元素引用
 const container = ref(null); // 页面容器元素
@@ -39,12 +56,47 @@ onMounted(() => {
 onBeforeUnmount(() => {
   props.register(props.pageNum, null);
 });
+
+/**
+ * 计算大头针的实际像素坐标
+ */
+const getPinPosition = (annotation) => {
+  return {
+    x: annotation.x * props.pageWidth,
+    y: annotation.y * props.pageHeight
+  };
+};
+
+/**
+ * 处理大头针双击
+ */
+const handlePinDoubleClick = (annotation) => {
+  emit('pin-dblclick', annotation);
+};
+
+/**
+ * 处理大头针删除
+ */
+const handlePinRemove = (annotationId) => {
+  emit('pin-remove', annotationId);
+};
 </script>
 
 <template>
   <div ref="container" class="pdf-page-container" :data-page-num="pageNum">
     <canvas ref="canvas" class="pdf-page-canvas"></canvas>
     <div ref="textLayer" class="pdf-text-layer"></div>
+    
+    <!-- 渲染当前页的大头针 -->
+    <AnnotationPin
+      v-for="annotation in annotations"
+      :key="annotation.id"
+      :annotation="annotation"
+      :x="getPinPosition(annotation).x"
+      :y="getPinPosition(annotation).y"
+      @dblclick="handlePinDoubleClick"
+      @remove="handlePinRemove"
+    />
   </div>
 </template>
 

@@ -116,6 +116,7 @@
           @loaded="onPDFLoaded"
           @pagechange="currentPage = $event"
           @rescale="onPDFRescale"
+          @navigate-to-message="handleNavigateToMessage"
         ></Reader>
       </main>
 
@@ -133,6 +134,7 @@
           :book-path="currentBookPath"
           :book-title="currentBookTitle"
           :book-key="chatScopeKey"
+          :reader-ref="readerRef"
           @close="chatOpen = false"
         />
       </aside>
@@ -148,9 +150,21 @@ import Reader from './features/Reader/Reader.vue';
 import ChatPanel from './features/ChatPanel/ChatPanel.vue';
 import SettingsMenu from './features/SettingsMenu.vue';
 
-import { ChatService } from '../bindings/hreader/services/chat'; //这个路径是正确的，不要修改
+// 导入 composables
+import {
+  useChatPanel,
+  useAnnotationNavigation,
+  useAppSettings,
+  useScreenshot,
+} from './composables';
+
+import { ChatService } from '../bindings/hreader/services/chat';
 import { BookService } from '../bindings/hreader/services/book';
-// --- 状态定义 ---
+
+// ========================================
+// 状态定义
+// ========================================
+
 const view = ref('library');
 const currentBookTitle = ref('');
 
@@ -172,16 +186,10 @@ const currentBookTitle = ref('');
  */
 const currentBookPath = ref('');
 const pdfSource = ref(null);
-const apiKey = ref('');
-const modelProvider = ref('aliyun');
-const modelName = ref('qwen3-omni-flash');
-const settingsOpen = ref(false);
+
 const chatOpen = ref(false);
 const chatPanelWidth = ref(0);
 const hasCustomChatWidth = ref(false);
-const isResizingChat = ref(false);
-const resizeStartX = ref(0);
-const resizeStartWidth = ref(420);
 
 // Bookshelf 组件引用
 const bookshelfRef = ref(null);
@@ -194,30 +202,71 @@ const readerRef = ref(null);
 const chatPanelRef = ref(null);
 const pageInputRef = ref(null);
 
-const getViewportWidth = () => (typeof window !== 'undefined' ? window.innerWidth : 0);
+// ========================================
+// Composables 初始化
+// ========================================
 
-const clampChatWidth = (value) => {
-  const viewportWidth = getViewportWidth();
-  const minWidth = 280;
-  const maxWidth = Math.max(360, Math.min(800, Math.floor(viewportWidth * 0.55)));
-  // 聊天面板既要有可用下限，也要防止在大屏上无限拉宽。
-  return Math.min(Math.max(Math.floor(value), minWidth), maxWidth);
-};
+/**
+ * 应用设置管理
+ */
+const {
+  apiKey,
+  modelProvider,
+  modelName,
+  settingsOpen,
+  loadApiKey,
+  loadModelConfig,
+  toggleSettings,
+  saveSettings,
+} = useAppSettings({ bookshelfRef, chatService: ChatService });
 
-const syncChatWidth = () => {
-  const viewportWidth = getViewportWidth();
-  if (!viewportWidth) return;
-  // 已经有宽度时沿用当前值，仅在窗口变化时重新夹紧。
-  const nextWidth = chatPanelWidth.value || Math.round(viewportWidth * 0.3);
-  chatPanelWidth.value = clampChatWidth(nextWidth);
-};
+/**
+ * 聊天面板管理
+ */
+const {
+  isResizingChat,
+  getViewportWidth,
+  syncChatWidth,
+  initChatWidth,
+  toggleChatPanel,
+  startChatResize,
+  handleChatResizeMove,
+  stopChatResize,
+  cleanup: cleanupChatPanel,
+} = useChatPanel({
+  chatOpen,
+  chatPanelWidth,
+  hasCustomChatWidth,
+  view,
+  readerRef,
+});
 
-const initChatWidth = () => {
-  const viewportWidth = getViewportWidth();
-  if (!viewportWidth) return;
-  // 第一次打开时按当前窗口宽度的 30% 初始化，给出默认侧栏占比。
-  chatPanelWidth.value = clampChatWidth(Math.round(viewportWidth * 0.3));
-};
+/**
+ * 截图功能
+ */
+const {
+  captureCurrentPage,
+  startAreaSelection,
+} = useScreenshot({
+  chatOpen,
+  readerRef,
+  addImageToChat: async (imageDataUrl) => {
+    if (chatPanelRef.value && typeof chatPanelRef.value.addAttachmentFromDataUrl === 'function') {
+      await chatPanelRef.value.addAttachmentFromDataUrl(imageDataUrl, 'screenshot.png');
+    }
+  },
+});
+
+/**
+ * 大头针导航
+ */
+const {
+  handleNavigateToMessage,
+} = useAnnotationNavigation({
+  chatOpen,
+  chatPanelRef,
+  toggleChatPanel,
+});
 
 const workspaceStyle = computed(() => ({
   '--chat-panel-width': `${chatPanelWidth.value}px`,
@@ -225,107 +274,6 @@ const workspaceStyle = computed(() => ({
 
 const chatScopeType = computed(() => (view.value === 'reader' ? 'book' : 'library'));
 const chatScopeKey = computed(() => (view.value === 'reader' ? currentBookPath.value : 'library'));
-
-const loadApiKey = async () => {
-  try {
-    apiKey.value = await ChatService.GetAPIKey();
-    return apiKey.value;
-  } catch (err) {
-    console.error('读取 API Key 失败', err);
-    return '';
-  }
-};
-
-const loadModelConfig = async () => {
-  try {
-    const config = await ChatService.GetModelConfig();
-    if (config) {
-      modelProvider.value = config.provider || 'aliyun';
-      modelName.value = config.model || 'qwen3-omni-flash';
-    }
-  } catch (err) {
-    console.error('读取模型配置失败', err);
-  }
-};
-
-const toggleSettings = async () => {
-  if (!settingsOpen.value) {
-    await loadApiKey();
-  }
-  settingsOpen.value = !settingsOpen.value;
-};
-
-const toggleChatPanel = () => {
-  const willOpen = !chatOpen.value;
-  chatOpen.value = willOpen;
-  if (willOpen) {
-    // 用户如果没有拖拽过，就按默认比例初始化；拖拽过则保留用户偏好。
-    if (!hasCustomChatWidth.value || !chatPanelWidth.value) {
-      initChatWidth();
-    } else {
-      syncChatWidth();
-    }
-    // 只有当聊天面板实际宽度没有超过 33% 时，才自动调用 Reader 的 fitWidth。
-    const viewportWidth = getViewportWidth();
-    const shouldAutoFitReader =
-      view.value === 'reader' &&
-      viewportWidth > 0 &&
-      chatPanelWidth.value <= Math.floor(viewportWidth * 0.33);
-
-    if (shouldAutoFitReader) {
-      nextTick(() => {
-        readerRef.value?.FitWidth();
-      });
-    }
-  }
-};
-
-const saveSettings = async (settings) => {
-  try {
-    await ChatService.SaveAPIKey(settings.apiKey);
-    await ChatService.SaveModelConfig({
-      provider: settings.provider,
-      model: settings.model,
-    });
-    
-    apiKey.value = settings.apiKey;
-    modelProvider.value = settings.provider;
-    modelName.value = settings.model;
-    settingsOpen.value = false;
-    
-    // API Key 保存后，检查是否需要显示/隐藏引导界面
-    if (bookshelfRef.value) {
-      bookshelfRef.value.checkOnboarding(settings.apiKey);
-    }
-  } catch (err) {
-    alert('保存设置失败：' + err.message);
-  }
-};
-
-const startChatResize = (event) => {
-  if (!chatOpen.value) return;
-  event.preventDefault();
-  isResizingChat.value = true;
-  resizeStartX.value = event.clientX;
-  resizeStartWidth.value = chatPanelWidth.value;
-  window.addEventListener('pointermove', handleChatResizeMove);
-  window.addEventListener('pointerup', stopChatResize);
-};
-
-const handleChatResizeMove = (event) => {
-  if (!isResizingChat.value) return;
-  const delta = resizeStartX.value - event.clientX;
-  // 一旦发生拖拽，就标记为用户自定义宽度，后续再次打开时不再强制恢复默认值。
-  hasCustomChatWidth.value = true;
-  chatPanelWidth.value = clampChatWidth(resizeStartWidth.value + delta);
-};
-
-const stopChatResize = () => {
-  if (!isResizingChat.value) return;
-  isResizingChat.value = false;
-  window.removeEventListener('pointermove', handleChatResizeMove);
-  window.removeEventListener('pointerup', stopChatResize);
-};
 
 onMounted(() => {
   Promise.all([
@@ -345,7 +293,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', syncChatWidth);
-  stopChatResize();
+  cleanupChatPanel();
 });
 
 // ========================================
@@ -466,95 +414,6 @@ const goToPageInput = (event) => {
   }
 };
 
-/**
- * 截取当前页并发送到剪贴板和聊天面板
- */
-const captureCurrentPage = async () => {
-  try {
-    const imageDataUrl = await readerRef.value?.captureCurrentPage();
-    if (!imageDataUrl) {
-      alert('截图失败');
-      return;
-    }
-
-    // 发送到剪贴板
-    await sendToClipboard(imageDataUrl);
-
-    // 如果聊天面板开着，自动添加到附件列表
-    if (chatOpen.value) {
-      await addImageToChat(imageDataUrl);
-    }
-
-    console.log('当前页截图成功');
-  } catch (err) {
-    console.error('截图失败:', err);
-    alert('截图失败: ' + err.message);
-  }
-};
-
-/**
- * 开始框选区域截图
- */
-const startAreaSelection = async () => {
-  try {
-    const imageDataUrl = await readerRef.value?.startAreaSelection();
-    if (!imageDataUrl) {
-      console.log('用户取消了框选');
-      return;
-    }
-
-    // 发送到剪贴板
-    await sendToClipboard(imageDataUrl);
-
-    // 如果聊天面板开着，自动添加到附件列表
-    if (chatOpen.value) {
-      await addImageToChat(imageDataUrl);
-    }
-
-    console.log('框选截图成功');
-  } catch (err) {
-    console.error('框选截图失败:', err);
-    alert('框选截图失败: ' + err.message);
-  }
-};
-
-/**
- * 将图片数据 URL 发送到剪贴板
- * @param {string} dataUrl - 图片的 data URL
- */
-const sendToClipboard = async (dataUrl) => {
-  try {
-    // 将 data URL 转换为 Blob
-    const response = await fetch(dataUrl);
-    const blob = await response.blob();
-
-    // 创建 ClipboardItem 并写入剪贴板
-    const clipboardItem = new ClipboardItem({ [blob.type]: blob });
-    await navigator.clipboard.write([clipboardItem]);
-    console.log('已复制到剪贴板');
-  } catch (err) {
-    console.error('复制到剪贴板失败:', err);
-    // 某些浏览器可能不支持，静默失败
-  }
-};
-
-/**
- * 将图片添加到聊天面板的附件列表
- * @param {string} dataUrl - 图片的 data URL
- */
-const addImageToChat = async (dataUrl) => {
-  try {
-    // 通过 chatPanelRef 访问 ChatPanel 组件的方法
-    if (chatPanelRef.value && typeof chatPanelRef.value.addAttachmentFromDataUrl === 'function') {
-      await chatPanelRef.value.addAttachmentFromDataUrl(dataUrl);
-      console.log('已添加图片到聊天面板');
-    } else {
-      console.warn('ChatPanel 未暴露 addAttachmentFromDataUrl 方法');
-    }
-  } catch (err) {
-    console.error('添加图片到聊天面板失败:', err);
-  }
-};
 
 </script>
 

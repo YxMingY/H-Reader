@@ -65,6 +65,8 @@
         :messages="messages"
         :loading-messages="loadingMessages"
         :render-markdown="renderMarkdown"
+        :reader-ref="readerRef"
+        :session-id="activeSessionId"
         @scroll="handleScroll"
       />
     
@@ -130,6 +132,11 @@ const props = defineProps({
   bookKey: {
     type: String,
     default: '',
+  },
+  /** Reader 组件引用（用于大头针功能） */
+  readerRef: {
+    type: Object,
+    default: null,
   },
 });
 
@@ -344,6 +351,18 @@ watch(
 defineExpose({
   /** 从 Data URL 添加附件（用于截图等功能） */
   addAttachmentFromDataUrl,
+  /** 切换到指定会话（不自动滚动） */
+  loadSession,
+  /** 切换到指定会话并自动滚动到底部 */
+  switchSession: loadSessionAndScroll,
+  /** 滚动到指定消息（通过索引）- 委托给 MessageDisplay */
+  scrollToMessage: (messageIndex) => {
+    if (!messageDisplayRef.value || !messageDisplayRef.value.scrollToMessage) {
+      console.warn('无法滚动到消息：MessageDisplay 未就绪');
+      return;
+    }
+    messageDisplayRef.value.scrollToMessage(messageIndex);
+  },
 });
 
 </script>

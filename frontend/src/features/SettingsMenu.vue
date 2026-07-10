@@ -150,6 +150,8 @@ const submit = () => {
     provider: draftProvider.value,
     model: draftModel.value,
   });
+  // 保存后自动关闭设置菜单
+  close();
 };
 </script>
 

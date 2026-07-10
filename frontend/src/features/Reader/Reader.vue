@@ -18,11 +18,13 @@ import {
   useScaleAdjust,
   useScrollPage,
   useScreenshot,
-  useReadingProgress
+  useReadingProgress,
+  useAnnotations
 } from './composables';
 
 // 导入页面渲染组件
 import PdfPageShell from './components/PdfPageShell.vue';
+import AnnotationPin from './components/AnnotationPin.vue';
 
 // 定义组件属性
 const props = defineProps({
@@ -31,7 +33,7 @@ const props = defineProps({
 });
 
 // 定义组件事件
-const emit = defineEmits(['loaded', 'pagechange']);
+const emit = defineEmits(['loaded', 'pagechange', 'navigate-to-message']);
 
 // DOM 元素引用
 const readerContainer = ref(null); // 阅读器容器元素
@@ -77,36 +79,63 @@ const {
 const { captureCurrentPage, startAreaSelection } = useScreenshot(currentPage, pageCanvasRefs);
 
 // ========================================
-// 阅读进度管理
+// 书籍路径管理
 // ========================================
-// 
-// 实现思路：
-// 1. 使用 PDF 内容哈希（SHA1）作为唯一标识，而非文件路径
-//    - 优势：即使文件被移动或重命名，阅读进度依然有效
-//    - 相同内容的文件共享同一个进度
-// 
-// 2. 等待 PDF 加载完成后再翻页
-//    - 避免在 DOM 未就绪时翻页导致的问题
-//    - 通过 isPdfLoaded 标记和 watch 机制实现
-// 
-// 3. 自动保存（带防抖）
-//    - 用户翻页后延迟 2 秒保存，避免频繁写入
-//    - 如果在此期间再次翻页，重置定时器
-// 
-// 4. 组件卸载时清理定时器，防止内存泄漏
 
 /**
  * bookPathRef - 书籍路径的响应式引用
  * 
  * 用途：
  * - 跟踪当前打开的书籍文件路径
- * - 用于计算 SHA1 哈希并关联阅读进度
+ * - 用于计算 SHA1 哈希并关联阅读进度和大头针
  * 
  * 注意：
  * - 从 props.bookPath 初始化
  * - 通过 watch 监听 props 变化并同步更新
  */
 const bookPathRef = ref(props.bookPath || '');
+
+// ========================================
+// 大头针标注管理
+// ========================================
+// 
+// 实现思路：
+// 1. 使用 PDF 内容哈希（SHA1）作为唯一标识，与阅读进度一致
+// 2. 坐标归一化存储（0-1 范围），适配不同缩放比例
+// 3. 支持双击导航到对应的 AI 对话
+// 4. 选择模式：用户点击“标记位置”后，再点击 PDF 创建大头针
+
+/**
+ * 解构大头针管理的方法
+ * 
+ * loadAnnotations: 加载当前 PDF 的所有大头针
+ * addAnnotation: 添加大头针
+ * removeAnnotation: 删除大头针
+ * getCurrentPageAnnotations: 获取当前页的大头针列表（computed）
+ * startSelectionMode: 开始选择模式（等待用户点击 PDF）
+ * cancelSelectionMode: 取消选择模式
+ * handlePageClick: 处理 PDF 页面点击（在选择模式下创建大头针）
+ * handlePinDoubleClick: 处理大头针双击事件
+ */
+const {
+  annotations,
+  isSelectingMode,
+  getCurrentPageAnnotations,
+  loadAnnotations,
+  addAnnotation,
+  removeAnnotation,
+  startSelectionMode,
+  cancelSelectionMode,
+  handlePageClick,
+  handlePinDoubleClick,
+} = useAnnotations(bookPathRef, currentPage, (data) => {
+  // 当用户双击大头针时，通知父组件进行导航
+  emit('navigate-to-message', data);
+});
+
+// ========================================
+// 阅读进度管理
+// ========================================
 
 /**
  * 解构阅读进度管理的方法
@@ -166,6 +195,11 @@ const loadPdf = async (source) => {
     // 步骤 8: 标记 PDF 已加载完成
     markPdfLoaded();
     
+    // 步骤 8.5: 加载大头针数据
+    if (bookPathRef.value) {
+      await loadAnnotations();
+    }
+    
     // 步骤 9: 恢复阅读进度（如果有保存的进度）
     if (bookPathRef.value) {
       const savedPage = await restoreProgress();
@@ -217,6 +251,97 @@ onMounted(() => {
   }
 });
 
+// ========================================
+// 大头针辅助函数
+// ========================================
+
+/**
+ * 处理阅读器点击（在选择模式下）
+ */
+const handleReaderClick = async (event) => {
+  if (!isSelectingMode.value) return;
+  
+  // 如果点击的是大头针或其他 UI 元素，不处理
+  if (event.target.closest('.annotation-pin') || event.target.closest('.selection-mode-hint')) {
+    return;
+  }
+  
+  // 获取当前页的 canvas
+  const pageNum = currentPage.value;
+  const canvas = pageCanvasRefs[pageNum];
+  
+  if (!canvas) {
+    console.warn(`第 ${pageNum} 页的 canvas 不存在`);
+    cancelSelectionMode();
+    return;
+  }
+  
+  // 获取 canvas 相对于视口的位置
+  const rect = canvas.getBoundingClientRect();
+  
+  // 计算点击位置相对于 canvas 的坐标
+  const clickX = event.clientX - rect.left;
+  const clickY = event.clientY - rect.top;
+  
+  // 检查是否在 canvas 范围内
+  if (clickX < 0 || clickX > rect.width || clickY < 0 || clickY > rect.height) {
+    console.log('点击不在当前页范围内，取消选择');
+    cancelSelectionMode();
+    return;
+  }
+  
+  // 计算归一化坐标（0-1 范围）
+  const normalizedX = clickX / rect.width;
+  const normalizedY = clickY / rect.height;
+  
+  console.log('创建大头针:', {
+    pageNum,
+    clickX,
+    clickY,
+    canvasWidth: rect.width,
+    canvasHeight: rect.height,
+    normalizedX,
+    normalizedY
+  });
+  
+  // 调用 handlePageClick 创建大头针
+  await handlePageClick(pageNum, clickX, clickY, rect.width, rect.height);
+};
+
+/**
+ * 处理删除大头针
+ */
+const handleRemoveAnnotation = async (annotationId) => {
+  try {
+    await removeAnnotation(annotationId);
+  } catch (err) {
+    console.error('删除大头针失败:', err);
+  }
+};
+
+/**
+ * 获取指定页码的大头针列表
+ */
+const getPageAnnotations = (pageNum) => {
+  const pins = annotations.value.filter(a => a.pageNum === pageNum);
+  if (pins.length > 0) {
+    console.log(`第 ${pageNum} 页有 ${pins.length} 个大头针:`, pins);
+  }
+  return pins;
+};
+
+/**
+ * 获取指定页码的高度（从 canvas 中获取）
+ */
+const getPageHeight = (pageNum) => {
+  const canvas = pageCanvasRefs[pageNum];
+  if (canvas) {
+    // 使用 canvas 的显示高度（style.height）
+    return canvas.offsetHeight || canvas.style.height || (pageWidth.value * 1.4);
+  }
+  return pageWidth.value * 1.4; // 默认 A4 比例
+};
+
 // 暴露给父组件的方法和属性
 defineExpose({
   pdfDoc,           // PDF 文档对象
@@ -230,17 +355,38 @@ defineExpose({
   GoToPrevPage,     // 上一页方法
   captureCurrentPage,   // 截取当前页方法
   startAreaSelection,   // 开始区域选择方法
+  // 大头针相关
+  isSelectingMode,      // 是否处于选择模式
+  getCurrentPageAnnotations, // 当前页的大头针列表（computed）
+  startSelectionMode,     // 开始选择模式
+  cancelSelectionMode,    // 取消选择模式
+  handlePageClick,        // 处理页面点击（创建大头针）
 });
 
 </script>
 <template>
-  <div class="reader-view" ref="readerContainer">
+  <div 
+    class="reader-view" 
+    ref="readerContainer"
+    :class="{ 'selection-mode': isSelectingMode }"
+    @click="handleReaderClick"
+  >
+    <!-- 选择模式提示 -->
+    <div v-if="isSelectingMode" class="selection-mode-hint">
+      👆 请点击 PDF 页面放置大头针（点击空白处取消）
+    </div>
+    
     <div class="pdf-canvas-container" ref="pdfCanvas">
       <PdfPageShell
-      v-for="pageNum in totalPages"
-      :key="pageNum"
-      :pageNum="pageNum"
-      :register="RegisterPageRefs"
+        v-for="pageNum in totalPages"
+        :key="pageNum"
+        :pageNum="pageNum"
+        :register="RegisterPageRefs"
+        :annotations="getPageAnnotations(pageNum)"
+        :pageWidth="pageWidth"
+        :pageHeight="getPageHeight(pageNum)"
+        @pin-dblclick="handlePinDoubleClick"
+        @pin-remove="handleRemoveAnnotation"
       />
     </div>
   </div>
@@ -264,5 +410,25 @@ defineExpose({
   flex-direction: column;
   align-items: center; /* 保持页面水平居中 */
   min-width: 100%; /* 确保容器至少占满整个视口宽度 */
+}
+
+/* 选择模式样式 */
+.reader-view.selection-mode {
+  cursor: crosshair;
+}
+
+.selection-mode-hint {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 8px;
+  font-size: 14px;
+  z-index: 1000;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 </style>
