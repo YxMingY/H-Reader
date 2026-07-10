@@ -49,7 +49,7 @@
                   <polyline points="21 15 16 10 5 21"></polyline>
                 </svg>
               </button>
-              <button @click="startAreaSelection" title="框选区域截图" class="nav-btn screenshot-btn" aria-label="框选区域截图">
+              <button @click="startAreaSelection" title="框选区域截图(Ctrl+Q)" class="nav-btn screenshot-btn" aria-label="框选区域截图">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M3 7V5a2 2 0 0 1 2-2h2"></path>
                   <path d="M17 3h2a2 2 0 0 1 2 2v2"></path>
@@ -80,8 +80,21 @@
             </div>
 
             <div class="zoom-controls">
-              <button @click="zoomOut" title="缩小" class="nav-btn">−</button>
-              <button @click="zoomIn" title="放大" class="nav-btn">+</button>
+              <button @click="zoomOut" title="缩小" class="nav-btn btn-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  <line x1="8" y1="11" x2="14" y2="11"></line>
+                </svg>
+              </button>
+              <button @click="zoomIn" title="放大" class="nav-btn btn-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                  <line x1="11" y1="8" x2="11" y2="14"></line>
+                  <line x1="8" y1="11" x2="14" y2="11"></line>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
