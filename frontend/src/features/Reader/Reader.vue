@@ -19,7 +19,8 @@ import {
   useScrollPage,
   useScreenshot,
   useReadingProgress,
-  useAnnotations
+  useAnnotations,
+  findPageByPoint
 } from './composables';
 
 // 导入页面渲染组件
@@ -266,42 +267,32 @@ const handleReaderClick = async (event) => {
     return;
   }
   
-  // 获取当前页的 canvas
-  const pageNum = currentPage.value;
-  const canvas = pageCanvasRefs[pageNum];
+  // 使用工具函数查找点击位置所在的页面
+  const pageInfo = findPageByPoint(
+    event.clientX,
+    event.clientY,
+    pageCanvasRefs,
+    totalPages.value
+  );
   
-  if (!canvas) {
-    console.warn(`第 ${pageNum} 页的 canvas 不存在`);
+  if (!pageInfo) {
+    console.log('点击不在任何页面上，取消选择');
     cancelSelectionMode();
     return;
   }
   
-  // 获取 canvas 相对于视口的位置
-  const rect = canvas.getBoundingClientRect();
+  const { pageNum, canvas, rect } = pageInfo;
   
   // 计算点击位置相对于 canvas 的坐标
   const clickX = event.clientX - rect.left;
   const clickY = event.clientY - rect.top;
-  
-  // 检查是否在 canvas 范围内
-  if (clickX < 0 || clickX > rect.width || clickY < 0 || clickY > rect.height) {
-    console.log('点击不在当前页范围内，取消选择');
-    cancelSelectionMode();
-    return;
-  }
-  
-  // 计算归一化坐标（0-1 范围）
-  const normalizedX = clickX / rect.width;
-  const normalizedY = clickY / rect.height;
   
   console.log('创建大头针:', {
     pageNum,
     clickX,
     clickY,
     canvasWidth: rect.width,
-    canvasHeight: rect.height,
-    normalizedX,
-    normalizedY
+    canvasHeight: rect.height
   });
   
   // 调用 handlePageClick 创建大头针

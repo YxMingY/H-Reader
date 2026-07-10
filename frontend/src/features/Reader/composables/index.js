@@ -20,3 +20,6 @@ export { useReadingProgress } from './useReadingProgress'
 
 // 大头针标注管理
 export { useAnnotations } from './useAnnotations'
+
+// 页面检测工具
+export { findPageByPoint, findPageBySelection } from './usePageDetection.ts'

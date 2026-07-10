@@ -1,4 +1,5 @@
 import { ref, Ref } from "vue";
+import { findPageBySelection } from './usePageDetection';
 
 /**
  * useScreenshot - PDF 页面截图功能 Composable
@@ -130,20 +131,25 @@ export function useScreenshot(
                 }
 
                 try {
-                    // 获取当前可见页面的 canvas
-                    const pageNum = currentPage.value;
-                    const sourceCanvas = pageCanvasRefs[pageNum];
-
-                    if (!sourceCanvas) {
-                        console.error(`第 ${pageNum} 页的 canvas 不存在`);
+                    // 使用工具函数查找选择区域所在的页面
+                    const pageInfo = findPageBySelection(
+                        left,
+                        top,
+                        width,
+                        height,
+                        pageCanvasRefs,
+                        Object.keys(pageCanvasRefs).length
+                    );
+                    
+                    if (!pageInfo) {
+                        console.error('无法确定选择区域所在的页面');
                         cleanup();
                         resolve(null);
                         return;
                     }
-
-                    // 计算 canvas 相对于视口的位置
-                    const rect = sourceCanvas.getBoundingClientRect();
                     
+                    const { pageNum, canvas: sourceCanvas, rect } = pageInfo;
+
                     // 计算选择区域在 canvas 中的坐标（考虑缩放）
                     const scaleX = sourceCanvas.width / rect.width;
                     const scaleY = sourceCanvas.height / rect.height;
