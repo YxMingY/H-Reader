@@ -47,14 +47,42 @@
         </div>
         
         <!-- 📌 标记位置按钮（仅在有 readerRef 时显示） -->
-        <button
-          v-if="readerRef"
-          class="pin-button"
-          @click="startPinMode(index)"
-          title="在 PDF 中标记此对话的位置"
-        >
-          📌 标记位置
-        </button>
+        <div v-if="readerRef" class="message-actions">
+          <button
+            class="action-btn"
+            @click="startPinMode(index)"
+            title="在 PDF 中标记此对话的位置"
+          >
+            📌
+          </button>
+          <!-- 用户消息：显示重新编辑和删除按钮 -->
+          <template v-if="message.role === 'user' && isLastRound && isLastRound(index)">
+            <button
+              class="action-btn"
+              @click="onEditMessage(index)"
+              title="重新编辑这条消息"
+            >
+              ✏️
+            </button>
+            <button
+              class="action-btn"
+              @click="handleDeleteRound && handleDeleteRound(index)"
+              title="删除本轮对话"
+            >
+              🗑️
+            </button>
+          </template>
+          <!-- AI 消息：只显示删除按钮 -->
+          <template v-else-if="message.role === 'assistant' && isLastRound && isLastRound(index)">
+            <button
+              class="action-btn"
+              @click="handleDeleteRound && handleDeleteRound(index)"
+              title="删除本轮对话"
+            >
+              🗑️
+            </button>
+          </template>
+        </div>
       </div>
     </div>
   </div>
@@ -103,6 +131,21 @@ const props = defineProps({
   sessionId: {
     type: String,
     default: ''
+  },
+  /** 判断是否是最新一轮对话的函数 */
+  isLastRound: {
+    type: Function,
+    default: null
+  },
+  /** 删除本轮对话的处理函数 */
+  handleDeleteRound: {
+    type: Function,
+    default: null
+  },
+  /** 重新编辑消息的处理函数 */
+  handleEditMessage: {
+    type: Function,
+    default: null
   }
 });
 
@@ -112,7 +155,9 @@ const props = defineProps({
 
 const emit = defineEmits([
   /** 滚动事件，向父组件传递 */
-  'scroll'
+  'scroll',
+  /** 编辑消息事件，传递消息内容 */
+  'edit-message'
 ]);
 
 // ========================================
@@ -260,6 +305,22 @@ const startPinMode = (messageIndex) => {
   
   console.log('启动大头针选择模式，消息索引:', messageIndex, '预览:', messagePreview);
   props.readerRef.startSelectionMode(props.sessionId, messageIndex, messagePreview);
+};
+
+/**
+ * 处理重新编辑消息（包装函数）
+ * @param {number} messageIndex - 消息索引
+ */
+const onEditMessage = async (messageIndex) => {
+  if (!props.handleEditMessage) {
+    console.warn('handleEditMessage 未提供');
+    return;
+  }
+  
+  const content = await props.handleEditMessage(messageIndex);
+  if (content) {
+    emit('edit-message', content);
+  }
 };
 
 /**
@@ -587,28 +648,38 @@ onBeforeUnmount(() => {
    📌 大头针标记按钮样式
    ======================================== */
 
-.pin-button {
+/* 消息操作按钮容器 */
+.message-actions {
   margin-top: 8px;
-  padding: 4px 12px;
-  font-size: 12px;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* 无边框图标按钮 */
+.action-btn {
+  padding: 4px 8px;
+  font-size: 16px;
   color: #666;
-  background: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-radius: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
 }
 
-.pin-button:hover {
-  background: rgba(0, 0, 0, 0.1);
-  border-color: rgba(0, 0, 0, 0.2);
+.action-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
   color: #333;
+  transform: scale(1.1);
 }
 
-.pin-button:active {
+.action-btn:active {
   transform: scale(0.95);
 }
 

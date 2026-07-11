@@ -67,7 +67,11 @@
         :render-markdown="renderMarkdown"
         :reader-ref="readerRef"
         :session-id="activeSessionId"
+        :is-last-round="isLastRound"
+        :handle-delete-round="handleDeleteRound"
+        :handle-edit-message="handleMessageEdit"
         @scroll="handleScroll"
+        @edit-message="handleEditMessage"
       />
     
       <!-- 消息输入区域：包含附件预览、输入框和操作按钮 -->
@@ -105,7 +109,7 @@
 
 import { computed, ref, watch } from 'vue';
 import { ChatService } from '../../../bindings/hreader/services/chat';
-import { useChatInput, useChatStream, useSession, useTools, useScrollBottom } from './composables';
+import { useChatInput, useChatStream, useSession, useTools, useScrollBottom, useMessageActions } from './composables';
 import { SessionList, MessageDisplay, InputArea } from './components';
 
 // ========================================
@@ -276,6 +280,32 @@ const {
   deleteSession,
   updateSessionTitle
 } = useSession(props, scopeTitle, scopeBookPath, errorMessage, scrollToBottom, resetScrollState, clearInput);
+
+/** 消息操作管理：处理回滚、重新编辑、删除等操作 */
+const {
+  isLastRound,
+  rollbackLastRound,
+  handleDeleteRound,
+  handleEditMessage: handleMessageEdit
+} = useMessageActions({
+  activeSessionId,
+  messages,
+  errorMessage,
+  loadSession,
+  props,
+  scopeBookPath,
+  draft
+});
+
+/**
+ * 处理重新编辑消息事件（供 MessageDisplay 调用）
+ * @param {string} content - 要编辑的消息内容
+ */
+const handleEditMessage = (content) => {
+  // 将消息内容填充到输入框
+  draft.value = content;
+  console.log('已填充编辑内容:', content);
+};
 
 /** 流式响应管理：处理后端推送的实时消息更新 */
 const { 

@@ -7,6 +7,7 @@
  * - useChatStream: 流式响应管理（实时消息更新）
  * - useTools: 工具函数（Markdown 渲染等）
  * - useScrollBottom: 滚动管理（智能滚动到底部）
+ * - useMessageActions: 消息操作管理（回滚、重新编辑、删除）
  */
 
 /** 会话管理 Composable */
@@ -23,3 +24,6 @@ export { useTools } from './useTools';
 
 /** 滚动管理 Composable */
 export { useScrollBottom } from './useScrollBottom';
+
+/** 消息操作管理 Composable */
+export { useMessageActions } from './useMessageActions';
