@@ -928,3 +928,80 @@ func (c *ChatService) SendMessageStream(message string) error {
 
 	return nil
 }
+
+// RollbackSessionMessages 回滚会话中最新的 n 条消息对
+//
+// 参数：
+//   - scopeType: 作用域类型（"library" 或 "book"）
+//   - bookPath:  书籍路径（scopeType=="book" 时必需）
+//   - sessionID: 会话 ID
+//   - n:         要删除的消息对数量（1 = 删除最近的 user + assistant 各一条）
+//
+// 返回：
+//   - 实际删除的消息对数量
+//   - 错误信息（如果会话不存在或操作失败）
+//
+// 注意：
+//   - 每条消息对包含一条用户消息和一条助手回复
+//   - 会同时回滚 History 和 Trace State
+//   - 如果 n 大于实际消息对数，会删除所有消息
+func (c *ChatService) RollbackSessionMessages(scopeType, bookPath, sessionID string, n int) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	scope, err := c.resolveScope(scopeType, bookPath)
+	if err != nil {
+		return 0, err
+	}
+
+	stored, err := c.loadStoredSession(scope, sessionID)
+	if err != nil {
+		return 0, err
+	}
+
+	// 恢复 TracedConversation
+	conv, err := c.newSessionConversation(stored.LLMStateJSON)
+	if err != nil {
+		return 0, err
+	}
+
+	// 执行回滚
+	deletedPairs := conv.RollbackMessages(n)
+	if deletedPairs == 0 {
+		return 0, nil // 没有可删除的消息
+	}
+
+	// 重新导出状态
+	newState, err := conv.ExportJSON()
+	if err != nil {
+		return 0, err
+	}
+
+	// 更新存储
+	now := time.Now().Format(time.RFC3339)
+	stored.LLMStateJSON = newState
+	stored.UpdatedAt = now
+
+	// 删除对应的 Messages 记录（每条消息对 = 2 条记录）
+	messagesToRemove := deletedPairs * 2
+	if messagesToRemove > len(stored.Messages) {
+		messagesToRemove = len(stored.Messages)
+	}
+	stored.Messages = stored.Messages[:len(stored.Messages)-messagesToRemove]
+	stored.MessageCount = len(stored.Messages)
+
+	// 更新预览
+	if len(stored.Messages) > 0 {
+		lastMsg := stored.Messages[len(stored.Messages)-1]
+		stored.LastMessagePreview = clippedPreview(lastMsg.Content)
+	} else {
+		stored.LastMessagePreview = ""
+	}
+
+	// 持久化保存
+	if err := c.persistSession(scope, stored); err != nil {
+		return 0, err
+	}
+
+	return deletedPairs, nil
+}
