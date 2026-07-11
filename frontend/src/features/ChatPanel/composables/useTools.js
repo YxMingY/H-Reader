@@ -107,45 +107,45 @@ export function useTools() {
   const renderMarkdown = (content) => {
     const text = String(content || '');
     
-    // 步骤 1：保护代码块和行内代码中的内容
-    // 使用占位符替换代码，避免公式预处理误伤
+    let processedText = text;
+            
+    // 步骤 1: 保护代码块和行内代码
     const codeBlocks = [];
     const inlineCodes = [];
     
-    // 保护多行代码块 ```...```
-    let processedText = text.replace(/```[\s\S]*?```/g, (match) => {
-      codeBlocks.push(match);
-      return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+    processedText = processedText.replace(/```[\s\S]*?```/g, (match) => {
+        codeBlocks.push(match);
+        return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
     });
     
-    // 保护行内代码 `...`
     processedText = processedText.replace(/`[^`]+`/g, (match) => {
-      inlineCodes.push(match);
-      return `__INLINE_CODE_${inlineCodes.length - 1}__`;
+        inlineCodes.push(match);
+        return `__INLINE_CODE_${inlineCodes.length - 1}__`;
     });
     
-    // 步骤 2：预处理公式（此时代码已被保护，不会被误伤）
-    
-    // 2.1 将 AI 输出的 [...] 格式转换为 $$...$$ （块级公式）
-    // 注意：只匹配独占一行的 [...]，避免与 Markdown 链接冲突
+    // 步骤 2: 转换 [...] 格式为 $$...$$
     processedText = processedText.replace(/(?:^|\n)\[([^\]]+)\](?=$|\n)/gm, (_, formula) => {
-      return `\n$$${formula.trim()}$$\n`;
+        return `\n$$${formula.trim()}$$\n`;
     });
     
-    // 2.2 清理 $...$ 周围的空格
-    processedText = processedText.replace(/\$\s*([^\n$]+?)\s*\$/g, (_, formula) => {
-      const trimmedFormula = formula.trim();
-      return `$${trimmedFormula}$`;
+    // 步骤 3: 转换  \[...\] 格式
+    processedText = processedText.replace(/\\\[([^\]]+?)\\\]/g, (_, formula) => {
+        return `$$${formula}$$`;
     });
     
-    // 步骤 3：恢复代码块
+    // 步骤 4: 清理 $...$ 外侧的空格
+    processedText = processedText.replace(/\$\x20*([^\n$]+?)\x20*\$/g, (_, formula) => {
+        const trimmedFormula = formula.trim();
+        return `$${trimmedFormula}$`;
+    });
+    
+    // 步骤 5: 恢复代码块和行内代码
     processedText = processedText.replace(/__CODE_BLOCK_(\d+)__/g, (_, index) => {
-      return codeBlocks[parseInt(index)];
+        return codeBlocks[parseInt(index)];
     });
     
-    // 步骤 4：恢复行内代码
     processedText = processedText.replace(/__INLINE_CODE_(\d+)__/g, (_, index) => {
-      return inlineCodes[parseInt(index)];
+        return inlineCodes[parseInt(index)];
     });
     
     return markdownRenderer.render(processedText);

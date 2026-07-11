@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>公式渲染测试 - 完整流程展示</title>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.1/dist/markdown-it.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markdown-it-texmath@1.0.0/texmath.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .test-case {
+            background: white;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #007acc;
+            margin-top: 0;
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 10px;
+        }
+        .stage {
+            margin-bottom: 15px;
+        }
+        .stage-label {
+            font-weight: bold;
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .stage-label::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #007acc;
+        }
+        .content-box {
+            background: #f8f8f8;
+            padding: 12px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-all;
+            border-left: 3px solid #007acc;
+            overflow-x: auto;
+        }
+        .rendered-output {
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            min-height: 50px;
+            background: #fafafa;
+            line-height: 1.8;
+        }
+        .markdown-body {
+            font-size: 14px;
+        }
+        .diff-highlight {
+            background: #fff3cd;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .info-box h3 {
+            margin: 0 0 8px 0;
+            color: #1976d2;
+            font-size: 14px;
+        }
+        .info-box p {
+            margin: 0;
+            font-size: 13px;
+            color: #555;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <h1>📐 公式渲染测试 - 完整流程展示</h1>
+    
+    <div class="info-box">
+        <h3>📋 测试说明</h3>
+        <p>每个测试用例展示三个阶段：<strong>原始格式</strong> → <strong>预处理后格式</strong> → <strong>最终渲染结果</strong>。预处理包括代码保护、格式转换和空格清理。</p>
+    </div>
+    
+    <!-- 测试 1 -->
+    <div class="test-case">
+        <h2>测试 1: 行内公式 $...$</h2>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 1: 原始格式（AI 输出）</div>
+            <div class="content-box" id="test1-original"></div>
+        </div>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 2: 预处理后格式</div>
+            <div class="content-box" id="test1-processed"></div>
+        </div>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 3: 最终渲染结果</div>
+            <div class="rendered-output markdown-body" id="test1-rendered"></div>
+        </div>
+    </div>
+
+    <!-- 测试 2 -->
+    <div class="test-case">
+        <h2>测试 2: 块级公式 $$...$$</h2>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 1: 原始格式（AI 输出）</div>
+            <div class="content-box" id="test2-original"></div>
+        </div>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 2: 预处理后格式</div>
+            <div class="content-box" id="test2-processed"></div>
+        </div>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 3: 最终渲染结果</div>
+            <div class="rendered-output markdown-body" id="test2-rendered"></div>
+        </div>
+    </div>
+
+    <!-- 测试 3 -->
+    <div class="test-case">
+        <h2>测试 3: LaTeX 括号公式 \(...\) 和 \[...\]</h2>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 1: 原始格式（AI 输出）</div>
+            <div class="content-box" id="test3-original"></div>
+        </div>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 2: 预处理后格式</div>
+            <div class="content-box" id="test3-processed"></div>
+        </div>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 3: 最终渲染结果</div>
+            <div class="rendered-output markdown-body" id="test3-rendered"></div>
+        </div>
+    </div>
+
+    <!-- 测试 4 -->
+    <div class="test-case">
+        <h2>测试 4: AI 输出的 [...] 格式</h2>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 1: 原始格式（AI 输出）</div>
+            <div class="content-box" id="test4-original"></div>
+        </div>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 2: 预处理后格式</div>
+            <div class="content-box" id="test4-processed"></div>
+        </div>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 3: 最终渲染结果</div>
+            <div class="rendered-output markdown-body" id="test4-rendered"></div>
+        </div>
+    </div>
+
+    <!-- 测试 5 -->
+    <div class="test-case">
+        <h2>测试 5: 混合公式格式（完整示例）</h2>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 1: 原始格式（AI 输出）</div>
+            <div class="content-box" id="test5-original"></div>
+        </div>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 2: 预处理后格式</div>
+            <div class="content-box" id="test5-processed"></div>
+        </div>
+        
+        <div class="stage">
+            <div class="stage-label">阶段 3: 最终渲染结果</div>
+            <div class="rendered-output markdown-body" id="test5-rendered"></div>
+        </div>
+    </div>
+
+    <script>
+        // ========================================
+        // 初始化 markdown-it 和 texmath
+        // ========================================
+        const md = window.markdownit({
+            breaks: true,
+            linkify: true,
+            typographer: true
+        });
+
+        md.use(window.texmath, {
+            engine: katex,
+            delimiters: ['dollars', 'brackets'],
+            throwOnError: false,
+            errorColor: '#cc0000',
+            katexOptions: {
+                macros: {},
+                strict: false
+            }
+        });
+
+        // ========================================
+        // 预处理函数（模拟 useTools.js 中的逻辑）
+        // ========================================
+        function preprocessMarkdown(text) {
+            let processedText = text;
+            
+            // 步骤 1: 保护代码块和行内代码
+            const codeBlocks = [];
+            const inlineCodes = [];
+            
+            processedText = processedText.replace(/```[\s\S]*?```/g, (match) => {
+                codeBlocks.push(match);
+                return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+            });
+            
+            processedText = processedText.replace(/`[^`]+`/g, (match) => {
+                inlineCodes.push(match);
+                return `__INLINE_CODE_${inlineCodes.length - 1}__`;
+            });
+            
+            // 步骤 2: 转换 [...] 格式为 $$...$$
+            processedText = processedText.replace(/(?:^|\n)\[([^\]]+)\](?=$|\n)/gm, (_, formula) => {
+                return `\n$$${formula.trim()}$$\n`;
+            });
+            
+            // 步骤 3: 转换  \[...\] 格式
+            processedText = processedText.replace(/\\\[([^\]]+?)\\\]/g, (_, formula) => {
+                return `$$${formula}$$`;
+            });
+            
+            // 步骤 4: 清理 $...$ 外侧的空格
+            processedText = processedText.replace(/\$\x20*([^\n$]+?)\x20*\$/g, (_, formula) => {
+                const trimmedFormula = formula.trim();
+                return `$${trimmedFormula}$`;
+            });
+            
+            // 步骤 5: 恢复代码块和行内代码
+            processedText = processedText.replace(/__CODE_BLOCK_(\d+)__/g, (_, index) => {
+                return codeBlocks[parseInt(index)];
+            });
+            
+            processedText = processedText.replace(/__INLINE_CODE_(\d+)__/g, (_, index) => {
+                return inlineCodes[parseInt(index)];
+            });
+            
+            return processedText;
+        }
+
+        // ========================================
+        // 测试用例
+        // ========================================
+
+        // 测试 1: 行内公式
+        const test1Original = '相位差为 $\\Delta \\phi = \\frac{2\\pi d \\sin(\\theta)}{\\lambda}$，其中 $\\theta$ 是入射角。';
+        document.getElementById('test1-original').textContent = test1Original;
+        
+        const test1Processed = preprocessMarkdown(test1Original);
+        document.getElementById('test1-processed').textContent = test1Processed;
+        
+        document.getElementById('test1-rendered').innerHTML = md.render(test1Processed);
+
+        // 测试 2: 块级公式
+        const test2Original = `相位差公式：
+$$\\Delta \\phi = \\frac{2\\pi d \\sin(\\theta)}{\\lambda}$$
+其中 $ \\theta $ 是入射角。`;
+        document.getElementById('test2-original').textContent = test2Original;
+        
+        const test2Processed = preprocessMarkdown(test2Original);
+        document.getElementById('test2-processed').textContent = test2Processed;
+        
+        document.getElementById('test2-rendered').innerHTML = md.render(test2Processed);
+
+        // 测试 3: LaTeX 括号公式
+        const test3Original = `相位差为 \\(\\Delta \\phi = \\frac{2\\pi d \\sin(\\theta)}{\\lambda}\\)，其中：
+\\[\\Delta \\phi = \\frac{2\\pi d \\sin(\\theta)}{\\lambda}\\]`;
+        document.getElementById('test3-original').textContent = test3Original;
+        
+        const test3Processed = preprocessMarkdown(test3Original);
+        document.getElementById('test3-processed').textContent = test3Processed;
+        
+        document.getElementById('test3-rendered').innerHTML = md.render(test3Processed);
+
+        // 测试 4: AI 输出的 [...] 格式
+        const test4Original = `为了使相位差不超过 π/8，我们有：
+[\\frac{2\\pi d}{\\lambda} \\leq \\frac{\\pi}{8}]
+从而：
+[d \\leq \\frac{\\lambda}{16}]`;
+        document.getElementById('test4-original').textContent = test4Original;
+        
+        const test4Processed = preprocessMarkdown(test4Original);
+        document.getElementById('test4-processed').textContent = test4Processed;
+        
+        document.getElementById('test4-rendered').innerHTML = md.render(test4Processed);
+
+        // 测试 5: 完整示例（混合多种格式）
+        const test5Original = `好的，让我们一步步来解释这段话的逻辑，并澄清为什么最大相位差不超过 \\( \\pi/8 \\)，以及为什么瑞利距离只考虑相位而不考虑幅度。
+
+### 1. 最大相位差不超过 \\( \\pi/8 \\)
+
+#### 逻辑背景
+- **Rayleigh距离** 的定义是基于这样一个假设：当信号源与天线阵列的距离大于某个特定值时，阵列元素之间接收到的信号的相位变化可以被近似为线性的。
+- 这个特定值就是 Rayleigh距离 \\( D_R \\)。
+
+#### 为什么是 \\( \\pi/8 \\)
+- **线性近似的有效性**：在远场条件下，信号的相位变化应该是缓慢且均匀的。如果相位变化太大，线性近似将不再有效。
+- **工程实践**：在实际应用中，通常选择 \\( \\pi/8 \\) 作为相位差的上限，因为在这个范围内，相位变化仍然可以被认为是线性的，且误差较小。这个值是一个经验性的选择，确保了相位的变化不会导致显著的非线性效应。
+
+具体来说：
+- 当信号源与天线阵列的距离等于或大于 \\( D_R \\) 时，阵列元素之间接收到的信号的最大相位差不超过 \\( \\pi/8 \\)。
+- 也就是说，在这个距离上，相位变化足够小，可以用线性模型来近似。
+
+### 2. Rayleigh距离只考虑相位不考虑幅度
+
+#### 传统Rayleigh距离的局限性
+- **仅考虑相位**：传统的Rayleigh距离公式 \\( D_R = \\frac{2D^2}{\\lambda} \\) 是基于相位变化的，它确保了在 \\( D_R \\) 距离上，相位变化不超过 \\( \\pi/8 \\)。
+- **忽略幅度变化**：然而，在实际应用中，特别是在近场区域内，信号的幅度也会发生变化。这种幅度变化可能会影响信号的接收和处理。
+
+#### 幅度变化的重要性
+- **幅度变化的影响**：在近场区域内，信号的幅度会随着位置的变化而显著变化，这会导致信号强度的不同，进而影响系统的性能。
+- **更全面的标准**：为了更准确地划分近场和远场区域，需要同时考虑相位和幅度的变化。
+
+### 具体解释
+
+1. **相位变化的近似**
+   - **假设法向入射**：在法向入射（即信号垂直于阵列平面）的情况下，相位差可以通过简单的几何关系计算。
+   - **相位差公式**：假设两个天线元素之间的距离为 \\( d \\)，信号波长为 \\( \\lambda \\)，则相位差为：
+     \\[ \\Delta \\phi = \\frac{2\\pi d \\sin(\\theta)}{\\lambda} \\]
+     其中 \\( \\theta \\) 是入射角。在法向入射时，\\( \\sin(\\theta) = 0 \\)，所以相位差简化为：
+     \\[ \\Delta \\phi = \\frac{2\\pi d}{\\lambda} \\]
+     为了使相位差不超过 \\( \\pi/8 \\)，我们有：
+     \\[ \\frac{2\\pi d}{\\lambda} \\leq \\frac{\\pi}{8} \\]
+     从而：
+     \\[ d \\leq \\frac{\\lambda}{16} \\]
+
+2. **幅度变化的考虑**
+   - **幅度变化公式**：在近场区域内，信号的幅度变化可以通过以下公式近似：
+     \\[ A(r) = \\frac{A_0}{r} \\]
+     其中 \\( A_0 \\) 是参考点处的幅度，\\( r \\) 是信号源到阵列元素的距离。
+   - **幅度变化的标准**：为了确保幅度变化可以忽略不计，我们要求幅度变化不超过一个预设的小值 \\( \\epsilon \\)：
+     \\[ \\left| \\frac{A(r + \\delta) - A(r)}{A(r)} \\right| \\leq \\epsilon \\]
+     其中 \\( \\delta \\) 是阵列元素之间的距离差。
+
+### 总结
+
+- **最大相位差不超过 \\( \\pi/8 \\)** 是一个经验性选择，确保相位变化足够小，可以用线性模型近似。
+- **传统Rayleigh距离** 只考虑相位变化，忽略了幅度变化，因此在某些应用场景下可能不够准确。
+- **更全面的标准** 需要同时考虑相位和幅度的变化，以更好地划分近场和远场区域。
+
+希望这些解释能帮助你理解这段话的逻辑。如果你还有其他问题或需要进一步的解释，请告诉我！`;
+
+        document.getElementById('test5-original').textContent = test5Original;
+        
+        const test5Processed = preprocessMarkdown(test5Original);
+        document.getElementById('test5-processed').textContent = test5Processed;
+        
+        document.getElementById('test5-rendered').innerHTML = md.render(test5Processed);
+    </script>
+</body>
+</html>
