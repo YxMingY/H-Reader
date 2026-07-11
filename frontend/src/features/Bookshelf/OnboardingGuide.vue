@@ -34,8 +34,11 @@
                 target="_blank"
                 class="info-link"
               >
-                🔗 前往阿里云注册获取 API Key
+                1. 点击前往阿里云注册获取 API Key<br/>
               </a>
+              <p>2. 注册或登录后，进入控制台，选择“API Key” -> 左上角“创建 API Key”</p>
+              <p>3. 创建新的 API 密钥，并复制 Key</p>
+              <p>4. 将复制的 Key 粘贴到 H-Reader 的设置中完成配置。</p>
             </div>
             
             <button 
@@ -319,12 +322,10 @@ const startUsing = () => {
 
 .info-link {
   display: inline-block;
-  font-size: 13px;
   color: var(--accent-color);
   text-decoration: none;
   font-weight: 500;
   transition: all 0.2s ease;
-  padding: 4px 0;
 }
 
 .info-link:hover {
