@@ -96,9 +96,6 @@ export function useMessageActions({
    * @returns {Promise<void>}
    */
   const handleDeleteRound = async (messageIndex) => {
-    if (!window.confirm('确定要删除本轮对话吗？')) {
-      return;
-    }
     
     try {
       const success = await rollbackLastRound();
@@ -119,11 +116,6 @@ export function useMessageActions({
   const handleEditMessage = async (messageIndex) => {
     const message = messages.value[messageIndex];
     if (!message || message.role !== 'user') {
-      return null;
-    }
-    
-    // 先确认删除
-    if (!window.confirm('确定要重新编辑这条消息吗？这将删除本轮对话。')) {
       return null;
     }
     

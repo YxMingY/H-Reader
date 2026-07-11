@@ -8,6 +8,7 @@
  * - Hover 显示提示信息
  */
 import { ref, onMounted } from 'vue';
+import { confirmDelete } from '../../../composables/useToast';
 
 // 定义组件属性
 const props = defineProps({
@@ -56,11 +57,12 @@ const handleDoubleClick = (event) => {
 /**
  * 处理右键菜单
  */
-const handleContextMenu = (event) => {
+const handleContextMenu = async (event) => {
     event.preventDefault();
     event.stopPropagation();
     
-    if (confirm('确定要删除这个大头针吗？')) {
+    const confirmed = await confirmDelete('这个大头针');
+    if (confirmed) {
         emit('remove', props.annotation.id);
     }
 };

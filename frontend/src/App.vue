@@ -152,6 +152,9 @@
         />
       </aside>
     </div>
+
+    <!-- 全局 Toast 确认框 -->
+    <ToastConfirm ref="toastRef" />
   </div>
 </template>
 
@@ -162,6 +165,7 @@ import Bookshelf from './features/Bookshelf/Bookshelf.vue';
 import Reader from './features/Reader/Reader.vue';
 import ChatPanel from './features/ChatPanel/ChatPanel.vue';
 import SettingsMenu from './features/SettingsMenu.vue';
+import ToastConfirm from './components/ToastConfirm.vue';
 
 // 导入 composables
 import {
@@ -170,6 +174,7 @@ import {
   useAppSettings,
   useScreenshot,
 } from './composables';
+import { setToastInstance } from './composables/useToast';
 
 import { ChatService } from '../bindings/hreader/services/chat';
 import { BookService } from '../bindings/hreader/services/book';
@@ -214,6 +219,7 @@ const zoomLevel = ref(1);
 const readerRef = ref(null);
 const chatPanelRef = ref(null);
 const pageInputRef = ref(null);
+const toastRef = ref(null);
 
 // ========================================
 // Composables 初始化
@@ -298,6 +304,11 @@ onMounted(() => {
     nextTick(() => {
       if (bookshelfRef.value) {
         bookshelfRef.value.checkOnboarding(apiKeyValue);
+      }
+      
+      // 初始化 Toast 实例
+      if (toastRef.value) {
+        setToastInstance(toastRef.value);
       }
     });
   });

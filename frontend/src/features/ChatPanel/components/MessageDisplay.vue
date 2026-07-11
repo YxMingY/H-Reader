@@ -66,7 +66,7 @@
             </button>
             <button
               class="action-btn"
-              @click="handleDeleteRound && handleDeleteRound(index)"
+              @click="onDeleteRound(index)"
               title="删除本轮对话"
             >
               🗑️
@@ -76,7 +76,7 @@
           <template v-else-if="message.role === 'assistant' && isLastRound && isLastRound(index)">
             <button
               class="action-btn"
-              @click="handleDeleteRound && handleDeleteRound(index)"
+              @click="onDeleteRound(index)"
               title="删除本轮对话"
             >
               🗑️
@@ -101,6 +101,7 @@
  */
 
 import { ref, watch, onBeforeUnmount } from 'vue';
+import { confirmDelete, confirmEdit } from '../../../composables/useToast';
 
 // ========================================
 // Props 定义
@@ -317,10 +318,35 @@ const onEditMessage = async (messageIndex) => {
     return;
   }
   
+  // 显示确认框
+  const confirmed = await confirmEdit();
+  if (!confirmed) {
+    return;
+  }
+  
   const content = await props.handleEditMessage(messageIndex);
   if (content) {
     emit('edit-message', content);
   }
+};
+
+/**
+ * 处理删除本轮对话（包装函数）
+ * @param {number} messageIndex - 消息索引
+ */
+const onDeleteRound = async (messageIndex) => {
+  if (!props.handleDeleteRound) {
+    console.warn('handleDeleteRound 未提供');
+    return;
+  }
+  
+  // 显示确认框
+  const confirmed = await confirmDelete('本轮对话');
+  if (!confirmed) {
+    return;
+  }
+  
+  props.handleDeleteRound(messageIndex);
 };
 
 /**

@@ -111,6 +111,7 @@
  */
 
 import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue';
+import { confirmDelete } from '../../../composables/useToast';
 
 // ========================================
 // Props 定义
@@ -181,8 +182,15 @@ const loadSession = (sessionId) => {
  * 删除指定会话
  * @param {string} sessionId - 要删除的会话 ID
  */
-const deleteSession = (sessionId) => {
-  emit('delete-session', sessionId);
+const deleteSession = async (sessionId) => {
+  // 获取会话标题用于确认框
+  const session = props.sessions.find(s => s.session_id === sessionId);
+  const sessionTitle = session?.title || '此会话';
+  
+  const confirmed = await confirmDelete(sessionTitle);
+  if (confirmed) {
+    emit('delete-session', sessionId);
+  }
 };
 
 /**

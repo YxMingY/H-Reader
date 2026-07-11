@@ -205,7 +205,6 @@ const backToSessions = () => {
  * @param {string} sessionId - 要删除的会话 ID
  */
 const deleteSession = async (sessionId) => {
-  if (!window.confirm('确定删除这个会话吗？')) return;
   errorMessage.value = '';
   try {
     await ChatService.DeleteSession(props.scopeType, scopeBookPath.value, sessionId);
