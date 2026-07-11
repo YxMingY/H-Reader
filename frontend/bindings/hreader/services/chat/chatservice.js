@@ -169,6 +169,33 @@ export function ResetConversation() {
 }
 
 /**
+ * RollbackSessionMessages 回滚会话中最新的 n 条消息对
+ * 
+ * 参数：
+ *   - scopeType: 作用域类型（"library" 或 "book"）
+ *   - bookPath:  书籍路径（scopeType=="book" 时必需）
+ *   - sessionID: 会话 ID
+ *   - n:         要删除的消息对数量（1 = 删除最近的 user + assistant 各一条）
+ * 
+ * 返回：
+ *   - 实际删除的消息对数量
+ *   - 错误信息（如果会话不存在或操作失败）
+ * 
+ * 注意：
+ *   - 每条消息对包含一条用户消息和一条助手回复
+ *   - 会同时回滚 History 和 Trace State
+ *   - 如果 n 大于实际消息对数，会删除所有消息
+ * @param {string} scopeType
+ * @param {string} bookPath
+ * @param {string} sessionID
+ * @param {number} n
+ * @returns {$CancellablePromise<number>}
+ */
+export function RollbackSessionMessages(scopeType, bookPath, sessionID, n) {
+    return $Call.ByID(1656409577, scopeType, bookPath, sessionID, n);
+}
+
+/**
  * SaveAPIKey 保存新的 API 密钥到配置文件
  * 
  * 流程：
