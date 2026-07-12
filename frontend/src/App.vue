@@ -155,6 +155,9 @@
 
     <!-- 全局 Toast 确认框 -->
     <ToastConfirm ref="toastRef" />
+    
+    <!-- 全局图片预览 -->
+    <ImagePreview ref="imagePreviewRef" />
   </div>
 </template>
 
@@ -166,6 +169,7 @@ import Reader from './features/Reader/Reader.vue';
 import ChatPanel from './features/ChatPanel/ChatPanel.vue';
 import SettingsMenu from './features/SettingsMenu.vue';
 import ToastConfirm from './components/ToastConfirm.vue';
+import ImagePreview from './components/ImagePreview.vue';
 
 // 导入 composables
 import {
@@ -175,6 +179,7 @@ import {
   useScreenshot,
 } from './composables';
 import { setToastInstance } from './composables/useToast';
+import { setPreviewInstance } from './composables/useImagePreview';
 
 import { ChatService } from '../bindings/hreader/services/chat';
 import { BookService } from '../bindings/hreader/services/book';
@@ -220,6 +225,7 @@ const readerRef = ref(null);
 const chatPanelRef = ref(null);
 const pageInputRef = ref(null);
 const toastRef = ref(null);
+const imagePreviewRef = ref(null);
 
 // ========================================
 // Composables 初始化
@@ -309,6 +315,11 @@ onMounted(() => {
       // 初始化 Toast 实例
       if (toastRef.value) {
         setToastInstance(toastRef.value);
+      }
+      
+      // 初始化图片预览实例
+      if (imagePreviewRef.value) {
+        setPreviewInstance(imagePreviewRef.value);
       }
     });
   });

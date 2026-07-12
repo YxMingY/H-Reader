@@ -102,6 +102,7 @@
 
 import { ref, watch, onBeforeUnmount } from 'vue';
 import { confirmDelete, confirmEdit } from '../../../composables/useToast';
+import { previewImage } from '../../../composables/useImagePreview';
 
 // ========================================
 // Props 定义
@@ -273,8 +274,7 @@ const getImageSrc = (imgPath) => {
  * @param {string} imgPath - 图片路径
  */
 const openImage = (imgPath) => {
-  // TODO: 实现图片预览功能（可以使用模态框或新窗口）
-  console.log('点击图片:', imgPath);
+  previewImage(imgPath, '消息附件图片');
 };
 
 /**

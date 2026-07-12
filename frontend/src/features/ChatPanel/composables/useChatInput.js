@@ -55,6 +55,7 @@ export function useChatInput(sending, errorMessage) {
     reader.onload = () => resolve({
       id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
       name: file.name,
+      size: file.size,
       dataUrl: reader.result,
     });
     reader.onerror = () => reject(reader.error || new Error('读取图片失败'));

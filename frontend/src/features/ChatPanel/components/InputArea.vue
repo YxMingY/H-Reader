@@ -13,7 +13,14 @@
     <!-- 附件预览区：显示已选择的图片缩略图 -->
     <div v-if="attachments.length" class="attachment-strip">
       <div v-for="item in attachments" :key="item.id" class="attachment-thumb">
-        <img :src="item.dataUrl" :alt="item.name" />
+        <img 
+          :src="item.dataUrl" 
+          :alt="item.name" 
+          @click="previewAttachment(item.dataUrl, item.name)"
+          style="cursor: pointer;"
+        />
+        <!-- 文件大小标签 -->
+        <div class="attachment-size">{{ formatFileSize(item.size) }}</div>
         <!-- 移除附件按钮 -->
         <button type="button" class="attachment-remove" @click="removeAttachment(item.id)">×</button>
       </div>
@@ -70,6 +77,7 @@
  */
 
 import { ref } from 'vue';
+import { previewImage } from '../../../composables/useImagePreview';
 
 // ========================================
 // Props 定义
@@ -126,6 +134,32 @@ const props = defineProps({
 const localFileInputRef = ref(null);
 
 // ========================================
+// 工具函数
+// ========================================
+
+/**
+ * 格式化文件大小为人类可读的格式
+ * @param {number} bytes - 文件大小（字节）
+ * @returns {string} 格式化后的文件大小字符串
+ */
+const formatFileSize = (bytes) => {
+  if (!bytes || bytes === 0) return '0 B';
+  
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let size = bytes;
+  let unitIndex = 0;
+  
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex++;
+  }
+  
+  // 保留一位小数，如果是整数则不显示小数点
+  const formatted = size % 1 === 0 ? size.toFixed(0) : size.toFixed(1);
+  return `${formatted} ${units[unitIndex]}`;
+};
+
+// ========================================
 // 事件定义
 // ========================================
 
@@ -148,6 +182,15 @@ const handlePickImages = () => {
   console.log('InputArea: 触发文件选择器');
   console.log('localFileInputRef.value:', localFileInputRef.value);
   localFileInputRef.value?.click();
+};
+
+/**
+ * 预览附件图片
+ * @param {string} dataUrl - 图片 data URL
+ * @param {string} name - 图片文件名
+ */
+const previewAttachment = (dataUrl, name) => {
+  previewImage(dataUrl, name);
 };
 
 /**
@@ -203,6 +246,19 @@ const sendMessage = () => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.attachment-size {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 10px;
+  text-align: center;
+  backdrop-filter: blur(4px);
 }
 
 .attachment-remove {
