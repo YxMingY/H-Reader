@@ -318,8 +318,8 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: center;
-  max-width: 90vw;
-  max-height: calc(90vh - 80px);
+  width: 90vw;
+  height: calc(90vh - 80px);
 }
 
 .preview-image {
