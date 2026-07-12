@@ -85,6 +85,7 @@
         :handle-paste="handlePaste"
         :remove-attachment="removeAttachment"
         :handle-file-input="handleFileInput"
+        :update-attachment-quality="updateAttachmentQuality"
         @send-message="sendMessage"
       />
     </div>
@@ -263,6 +264,7 @@ const {
   clearErrorOnInput,
   clearErrorBeforeAction,
   removeAttachment,
+  updateAttachmentQuality,
 } = useChatInput(sending, errorMessage);
 
 /** 会话管理：处理会话列表、创建、加载、删除等操作 */

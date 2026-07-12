@@ -135,8 +135,8 @@ const sendMessage = async () => {
     // 步骤 4: 乐观更新 - 创建占位消息
     const localNow = new Date().toISOString();
     
-    // 准备附件数据（用于立即显示）
-    const pendingImages = attachments.value.map((item) => item.dataUrl);
+    // 准备附件数据（用于立即显示）- 使用压缩后的图片
+    const pendingImages = attachments.value.map((item) => item.compressedDataUrl);
     
     // 创建用户消息（包含附件）
     messages.value.push({ 
@@ -160,7 +160,7 @@ const sendMessage = async () => {
     // 步骤 7: 滚动到底部
     await scrollToBottom(true);
 
-    // 步骤 8: 调用后端流式 API
+    // 步骤 8: 调用后端流式 API - 发送压缩后的图片
     await ChatService.SendMessageStreamInSession(
       props.scopeType,
       props.scopeType === 'book' ? props.bookPath : '',

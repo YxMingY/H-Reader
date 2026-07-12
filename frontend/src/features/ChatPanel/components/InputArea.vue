@@ -14,9 +14,9 @@
     <div v-if="attachments.length" class="attachment-strip">
       <div v-for="item in attachments" :key="item.id" class="attachment-thumb">
         <img 
-          :src="item.dataUrl" 
+          :src="item.compressedDataUrl" 
           :alt="item.name" 
-          @click="previewAttachment(item.dataUrl, item.name)"
+          @click="previewAttachment(item)"
           style="cursor: pointer;"
         />
         <!-- 文件大小标签 -->
@@ -89,7 +89,7 @@ const props = defineProps({
     type: String,
     required: true
   },
-  /** 已选择的图片附件列表 */
+  /** 已选择的图片附件列表（包含原始和压缩数据） */
   attachments: {
     type: Array,
     required: true
@@ -121,6 +121,11 @@ const props = defineProps({
   },
   /** 处理文件选择的回调函数 */
   handleFileInput: {
+    type: Function,
+    required: true
+  },
+  /** 更新附件质量的回调函数 */
+  updateAttachmentQuality: {
     type: Function,
     required: true
   }
@@ -186,11 +191,21 @@ const handlePickImages = () => {
 
 /**
  * 预览附件图片
- * @param {string} dataUrl - 图片 data URL
- * @param {string} name - 图片文件名
+ * @param {Object} attachment - 附件对象（包含原始和压缩数据）
  */
-const previewAttachment = (dataUrl, name) => {
-  previewImage(dataUrl, name);
+const previewAttachment = (attachment) => {
+  // 传递完整的附件对象，以便在预览中进行质量调节
+  previewImage(attachment.compressedDataUrl, attachment.name, attachment);
+};
+
+/**
+ * 处理质量滑块变化
+ * @param {string} id - 附件 ID
+ * @param {string|number} value - 质量百分比 (50-100)
+ */
+const handleQualityChange = (id, value) => {
+  const quality = Math.max(0.5, Math.min(1.0, Number(value) / 100));
+  props.updateAttachmentQuality(id, quality);
 };
 
 /**
@@ -228,7 +243,7 @@ const sendMessage = () => {
 
 .attachment-strip {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
   gap: 8px;
   margin-bottom: 10px;
 }
@@ -272,6 +287,7 @@ const sendMessage = () => {
   background: rgba(0, 0, 0, 0.58);
   color: #fff;
   cursor: pointer;
+  z-index: 2;
 }
 
 .chat-input {

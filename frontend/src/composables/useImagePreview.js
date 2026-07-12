@@ -27,15 +27,16 @@ export function setPreviewInstance(instance) {
  * 显示图片预览
  * @param {string} imageUrl - 图片 URL 或 data URL
  * @param {string} alt - 图片描述（可选）
+ * @param {Object} attachment - 附件对象（可选，用于质量调节）
  */
-export function previewImage(imageUrl, alt = '') {
+export function previewImage(imageUrl, alt = '', attachment = null) {
   if (!previewInstance) {
     console.warn('预览实例未初始化，降级使用新窗口打开');
     window.open(imageUrl, '_blank');
     return;
   }
   
-  previewInstance.show(imageUrl, alt);
+  previewInstance.show(imageUrl, alt, attachment);
 }
 
 /**
