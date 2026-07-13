@@ -47,8 +47,9 @@
         </div>
         
         <!-- 📌 标记位置按钮（仅在有 readerRef 时显示） -->
-        <div v-if="readerRef" class="message-actions">
+        <div class="message-actions">
           <button
+            v-if="readerRef"
             class="action-btn"
             @click="startPinMode(index)"
             title="在 PDF 中标记此对话的位置"
@@ -56,7 +57,7 @@
             📌
           </button>
           <!-- 用户消息：显示重新编辑和删除按钮 -->
-          <template v-if="message.role === 'user' && isLastRound && isLastRound(index)">
+          <template v-if="message.role === 'user' && isLastRound(index)">
             <button
               class="action-btn"
               @click="onEditMessage(index)"
@@ -73,7 +74,7 @@
             </button>
           </template>
           <!-- AI 消息：只显示删除按钮 -->
-          <template v-else-if="message.role === 'assistant' && isLastRound && isLastRound(index)">
+          <template v-else-if="message.role === 'assistant' && isLastRound(index)">
             <button
               class="action-btn"
               @click="onDeleteRound(index)"
