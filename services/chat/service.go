@@ -60,7 +60,21 @@ func NewChatService() *ChatService {
 	}
 
 	// 尝试使用已保存的 API_KEY 和模型配置初始化 client
-	if config.API_KEY != "" {
+	// 优先使用新的 api_keys 结构，向后兼容旧的 api_key
+	apiKey := ""
+	if config.APIKeys != nil && len(config.APIKeys) > 0 {
+		// 使用当前 provider 对应的 key
+		provider := config.Provider
+		if provider == "" {
+			provider = string(defaultProvider)
+		}
+		apiKey = config.APIKeys[provider]
+	} else if config.APIKey != "" {
+		// 向后兼容：使用旧的 api_key 字段
+		apiKey = config.APIKey
+	}
+
+	if apiKey != "" {
 		provider := config.Provider
 		if provider == "" {
 			provider = string(defaultProvider)
@@ -74,7 +88,7 @@ func NewChatService() *ChatService {
 		// 创建 LLM 客户端，如果失败则保持 client 为 nil
 		if client, err := llmkit.NewClient(llmkit.Config{
 			Provider: llmkit.ProviderType(provider),
-			APIKey:   config.API_KEY,
+			APIKey:   apiKey,
 			Model:    model,
 		}); err == nil {
 			cs.client = client

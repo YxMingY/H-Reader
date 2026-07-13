@@ -4,7 +4,7 @@ import { ref } from 'vue';
  * useAppSettings - 应用设置管理 Composable
  * 
  * 功能：
- * - 加载和保存 API Key
+ * - 加载和保存各提供商的 API Keys
  * - 加载和保存模型配置
  * - 管理设置面板开关状态
  * 
@@ -14,19 +14,29 @@ import { ref } from 'vue';
  * @returns {Object} 设置管理方法和状态
  */
 export function useAppSettings({ bookshelfRef, chatService }) {
-  const apiKey = ref('');
+  const apiKeys = ref({
+    aliyun: '',
+    deepseek: '',
+    glm: '',
+  });
   const modelProvider = ref('aliyun');
   const modelName = ref('qwen3-omni-flash');
   const settingsOpen = ref(false);
 
   /**
-   * 从后端加载 API Key
+   * 从后端加载所有提供商的 API Keys
    */
-  const loadApiKey = async () => {
+  const loadApiKeys = async () => {
     try {
-      apiKey.value = await chatService.GetAPIKey();
+      const keys = await chatService.GetAllAPIKeys();
+      // 合并到现有对象，保留未设置的 provider
+      apiKeys.value = {
+        aliyun: keys.aliyun || '',
+        deepseek: keys.deepseek || '',
+        glm: keys.glm || '',
+      };
     } catch (err) {
-      console.error('加载 API Key 失败:', err);
+      console.error('加载 API Keys 失败:', err);
     }
   };
 
@@ -49,11 +59,11 @@ export function useAppSettings({ bookshelfRef, chatService }) {
 
   /**
    * 切换设置面板显示状态
-   * - 打开时自动加载 API Key
+   * - 打开时自动加载所有 API Keys
    */
   const toggleSettings = async () => {
     if (!settingsOpen.value) {
-      await loadApiKey();
+      await loadApiKeys();
     }
     settingsOpen.value = !settingsOpen.value;
   };
@@ -61,26 +71,37 @@ export function useAppSettings({ bookshelfRef, chatService }) {
   /**
    * 保存设置到后端
    * @param {Object} settings - 设置对象
-   * @param {string} settings.apiKey - API Key
-   * @param {string} settings.provider - 模型提供商
+   * @param {Object} settings.apiKeys - 各提供商的 API Keys 映射
+   * @param {string} settings.provider - 当前选中的模型提供商
    * @param {string} settings.model - 模型名称
    */
   const saveSettings = async (settings) => {
     try {
-      await chatService.SaveAPIKey(settings.apiKey);
+      // 保存当前 provider 的 API Key
+      const currentProviderKey = settings.apiKeys[settings.provider];
+      if (currentProviderKey && currentProviderKey.trim()) {
+        await chatService.SaveAPIKey(settings.provider, currentProviderKey.trim());
+      }
+      
+      // 保存模型配置
       await chatService.SaveModelConfig({
         provider: settings.provider,
         model: settings.model,
       });
       
-      apiKey.value = settings.apiKey;
+      // 更新本地状态
+      apiKeys.value = {
+        ...apiKeys.value,
+        ...settings.apiKeys,
+      };
       modelProvider.value = settings.provider;
       modelName.value = settings.model;
       settingsOpen.value = false; // 保存成功后自动关闭设置面板
       
       // API Key 保存后，检查是否需要显示/隐藏引导界面
       if (bookshelfRef.value) {
-        bookshelfRef.value.checkOnboarding(settings.apiKey);
+        const hasAnyKey = Object.values(apiKeys.value).some(key => key && key.trim());
+        bookshelfRef.value.checkOnboarding(hasAnyKey ? 'has-key' : '');
       }
     } catch (err) {
       alert('保存设置失败：' + err.message);
@@ -88,11 +109,11 @@ export function useAppSettings({ bookshelfRef, chatService }) {
   };
 
   return {
-    apiKey,
+    apiKeys,
     modelProvider,
     modelName,
     settingsOpen,
-    loadApiKey,
+    loadApiKeys,
     loadModelConfig,
     toggleSettings,
     saveSettings,

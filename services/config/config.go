@@ -44,10 +44,11 @@ import (
 
 // Config 应用配置结构体
 type Config struct {
-	API_KEY       string `json:"api_key"`        // LLM服务API密钥
-	DefaultFolder string `json:"default_folder"` // 默认PDF书籍文件夹路径
-	Provider      string `json:"provider"`       // 模型提供商：aliyun, deepseek, glm
-	Model         string `json:"model"`          // 具体模型名称
+	APIKey        string            `json:"api_key"`        // LLM服务API密钥（已废弃，保留用于向后兼容）
+	APIKeys       map[string]string `json:"api_keys"`       // 各提供商的API密钥映射 {provider: api_key}
+	DefaultFolder string            `json:"default_folder"` // 默认PDF书籍文件夹路径
+	Provider      string            `json:"provider"`       // 模型提供商：aliyun, deepseek, glm
+	Model         string            `json:"model"`          // 具体模型名称
 }
 
 var (
@@ -177,7 +178,26 @@ func (c *Config) LoadFromFile() error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(data, c)
+
+	if err := json.Unmarshal(data, c); err != nil {
+		return err
+	}
+
+	// 确保 api_keys 不为 nil
+	if c.APIKeys == nil {
+		c.APIKeys = make(map[string]string)
+	}
+
+	// 自动迁移逻辑：如果旧的 api_key 有值但 api_keys 为空，自动迁移
+	if c.APIKey != "" && len(c.APIKeys) == 0 {
+		// 默认迁移到 aliyun（因为之前只有一个 key）
+		c.APIKeys["aliyun"] = c.APIKey
+		c.APIKey = "" // 清空旧字段
+		// 自动保存迁移后的配置
+		c.SaveToFile()
+	}
+
+	return nil
 }
 
 // SaveToFile 将当前Config对象序列化为JSON并写入config.json

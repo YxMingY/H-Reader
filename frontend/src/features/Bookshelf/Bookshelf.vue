@@ -80,8 +80,10 @@ const showOnboarding = ref(false);
  * 策略：
  * - 只有当文件夹也未设置时，才显示完整引导界面
  * - 如果只缺少 API Key，显示书架但给出提示（允许使用阅读功能）
+ * 
+ * @param {string} status - 'has-key' 表示有 API Key，空字符串表示没有
  */
-const checkOnboarding = (apiKey) => {
+const checkOnboarding = (status) => {
   // 只有当文件夹也未设置时，才显示引导界面
   const needsOnboarding = !scanDir.value;
   showOnboarding.value = needsOnboarding;

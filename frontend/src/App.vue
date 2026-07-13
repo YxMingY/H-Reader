@@ -25,7 +25,7 @@
             </button>
             <SettingsMenu
               v-model:open="settingsOpen"
-              :api-key="apiKey"
+              :api-keys="apiKeys"
               :provider="modelProvider"
               :model="modelName"
               @save="saveSettings"
@@ -116,7 +116,7 @@
         <Bookshelf 
           v-show="view === 'library'" 
           ref="bookshelfRef"
-          :has-api-key="!!apiKey"
+          :has-api-key="hasAnyApiKey"
           @select="openBook" 
           @settings-opened="toggleSettings"
         />
@@ -235,11 +235,11 @@ const imagePreviewRef = ref(null);
  * 应用设置管理
  */
 const {
-  apiKey,
+  apiKeys,
   modelProvider,
   modelName,
   settingsOpen,
-  loadApiKey,
+  loadApiKeys,
   loadModelConfig,
   toggleSettings,
   saveSettings,
@@ -297,19 +297,30 @@ const workspaceStyle = computed(() => ({
   '--chat-panel-width': `${chatPanelWidth.value}px`,
 }));
 
+// 检查是否有任何一个提供商配置了 API Key
+const hasAnyApiKey = computed(() => {
+  if (!apiKeys.value || typeof apiKeys.value !== 'object') {
+    return false;
+  }
+  return Object.values(apiKeys.value).some(key => key && key.trim());
+});
+
 const chatScopeType = computed(() => (view.value === 'reader' ? 'book' : 'library'));
 const chatScopeKey = computed(() => (view.value === 'reader' ? currentBookPath.value : 'library'));
 
 onMounted(() => {
   Promise.all([
-    loadApiKey(),
+    loadApiKeys(),
     loadModelConfig()
-  ]).then(([apiKeyValue]) => {
-    // API Key 加载完成后，检查是否需要显示引导界面
+  ]).then(([apiKeysValue]) => {
+    // API Keys 加载完成后，检查是否需要显示引导界面
     // 使用 nextTick 确保 bookshelfRef 已经挂载
     nextTick(() => {
       if (bookshelfRef.value) {
-        bookshelfRef.value.checkOnboarding(apiKeyValue);
+        const hasAnyKey = apiKeysValue && typeof apiKeysValue === 'object' 
+          ? Object.values(apiKeysValue).some(key => key && key.trim())
+          : false;
+        bookshelfRef.value.checkOnboarding(hasAnyKey ? 'has-key' : '');
       }
       
       // 初始化 Toast 实例

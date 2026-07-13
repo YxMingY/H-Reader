@@ -13,10 +13,11 @@
 
           <div class="settings-body">
             <!-- API Key -->
-            <label class="settings-label" for="api-key-input">API_KEY</label>
+            <label class="settings-label" for="api-key-input">API_KEY（{{ getProviderLabel(draftProvider) }}）</label>
             <input
               id="api-key-input"
-              v-model="draftKey"
+              :value="currentDraftKey"
+              @input="updateCurrentDraftKey($event.target.value)"
               class="settings-input"
               type="text"
               spellcheck="false"
@@ -24,7 +25,7 @@
               placeholder="输入后端 API_KEY"
               @keyup.enter="submit"
             />
-            <p class="settings-hint">保存后会写入本地 config.json，并在下次启动时用于初始化后端。</p>
+            <p class="settings-hint">保存后会写入本地 config.json，每个提供商可以有独立的 API Key。</p>
 
             <!-- 模型提供商 -->
             <label class="settings-label" for="provider-select" style="margin-top: 18px;">模型提供商</label>
@@ -50,8 +51,24 @@
                 {{ model.label }}
                 <span v-if="model.multimodal" class="multimodal-badge">🖼️</span>
               </option>
+              <option value="__custom__">✏️ 自定义模型...</option>
             </select>
-            <p class="settings-hint">选择您要使用的 AI 模型。<span v-if="selectedModel?.multimodal">该模型支持图片理解。</span></p>
+            
+            <!-- 自定义模型输入框 -->
+            <div v-if="draftModel === '__custom__'" class="custom-model-input">
+              <input
+                v-model="customModelName"
+                class="settings-input"
+                type="text"
+                spellcheck="false"
+                autocomplete="off"
+                placeholder="输入自定义模型名称"
+                @keyup.enter="submit"
+              />
+              <p class="settings-hint">输入您要使用的自定义模型名称。</p>
+            </div>
+            
+            <p v-else class="settings-hint">选择您要使用的 AI 模型。<span v-if="selectedModel?.multimodal">该模型支持图片理解。</span></p>
           </div>
 
           <div class="settings-actions">
@@ -69,9 +86,13 @@ import { ref, watch, computed } from 'vue';
 
 const props = defineProps({
   open: Boolean,
-  apiKey: {
-    type: String,
-    default: '',
+  apiKeys: {
+    type: Object,
+    default: () => ({
+      aliyun: '',
+      deepseek: '',
+      glm: '',
+    }),
   },
   provider: {
     type: String,
@@ -85,13 +106,23 @@ const props = defineProps({
 
 const emit = defineEmits(['update:open', 'save']);
 
-const draftKey = ref('');
+const draftApiKeys = ref({
+  aliyun: '',
+  deepseek: '',
+  glm: '',
+});
 const draftProvider = ref('aliyun');
 const draftModel = ref('qwen3-omni-flash');
+const customModelName = ref('');
 
 // 各提供商的可用模型列表
 const modelOptions = {
   aliyun: [
+    { value: 'qwen3.7-plus', label: '通义千问 3.7 Plus' },
+    { value: 'qwen3.6-plus', label: '通义千问 3.6 Plus' },
+    { value: 'qwen3.5-omni-plus-2026-03-15', label: '通义千问 3.5 Omni Plus （新）(多模态)', multimodal: true },
+    { value: 'qwen3.7-max', label: '通义千问 3.7 Max' },
+    { value: 'Qwen3.5-Plus', label: '通义千问 3.5 Plus' },
     { value: 'qwen3-omni-flash', label: '通义千问 Omni Flash (多模态)', multimodal: true },
     { value: 'qwen3.5-omni-plus', label: '通义千问 3.5 Omni Plus (多模态)', multimodal: true },
     { value: 'qwen-turbo', label: '通义千问 Turbo' },
@@ -101,6 +132,8 @@ const modelOptions = {
   deepseek: [
     { value: 'deepseek-chat', label: 'DeepSeek Chat' },
     { value: 'deepseek-coder', label: 'DeepSeek Coder' },
+    { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
+    { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
   ],
   glm: [
     { value: 'glm-4', label: 'GLM-4 (多模态)', multimodal: true },
@@ -123,9 +156,22 @@ watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) {
-      draftKey.value = props.apiKey || '';
+      // 加载所有提供商的 API Keys
+      draftApiKeys.value = {
+        aliyun: props.apiKeys?.aliyun || '',
+        deepseek: props.apiKeys?.deepseek || '',
+        glm: props.apiKeys?.glm || '',
+      };
       draftProvider.value = props.provider || 'aliyun';
       draftModel.value = props.model || 'qwen3-omni-flash';
+      // 检查当前模型是否在预设列表中，如果不在则设为自定义
+      const isInList = availableModels.value.some(m => m.value === draftModel.value);
+      if (!isInList && draftModel.value) {
+        customModelName.value = draftModel.value;
+        draftModel.value = '__custom__';
+      } else {
+        customModelName.value = '';
+      }
     }
   }
 );
@@ -137,7 +183,34 @@ const onProviderChange = () => {
   const models = modelOptions[draftProvider.value];
   if (models && models.length > 0) {
     draftModel.value = models[0].value;
+    customModelName.value = '';
   }
+};
+
+/**
+ * 获取当前 provider 对应的 draft key
+ */
+const currentDraftKey = computed(() => {
+  return draftApiKeys.value[draftProvider.value] || '';
+});
+
+/**
+ * 更新当前 provider 的 draft key
+ */
+const updateCurrentDraftKey = (value) => {
+  draftApiKeys.value[draftProvider.value] = value;
+};
+
+/**
+ * 获取提供商的中文标签
+ */
+const getProviderLabel = (provider) => {
+  const labels = {
+    aliyun: '阿里云',
+    deepseek: 'DeepSeek',
+    glm: '智谱 GLM',
+  };
+  return labels[provider] || provider;
 };
 
 const close = () => {
@@ -145,10 +218,18 @@ const close = () => {
 };
 
 const submit = () => {
+  // 如果是自定义模型，使用输入的模型名称
+  const finalModel = draftModel.value === '__custom__' ? customModelName.value.trim() : draftModel.value;
+  
+  if (draftModel.value === '__custom__' && !finalModel) {
+    alert('请输入自定义模型名称');
+    return;
+  }
+  
   emit('save', {
-    apiKey: draftKey.value.trim(),
+    apiKeys: { ...draftApiKeys.value },
     provider: draftProvider.value,
-    model: draftModel.value,
+    model: finalModel,
   });
   // 保存后自动关闭设置菜单
   close();
@@ -276,6 +357,10 @@ const submit = () => {
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-secondary);
+}
+
+.custom-model-input {
+  margin-top: 10px;
 }
 
 .settings-actions {

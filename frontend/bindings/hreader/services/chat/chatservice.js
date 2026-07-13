@@ -73,17 +73,34 @@ export function DeleteSession(scopeType, bookPath, sessionID) {
 }
 
 /**
- * GetAPIKey 从缓存配置中读取 API 密钥
+ * GetAPIKey 从缓存配置中读取指定提供商的 API 密钥
  * 
  * 无需重新加载文件，直接使用内存中的单例缓存。
- * 如果配置未初始化，返回空字符串。
+ * 如果配置未初始化或该提供商没有配置 key，返回空字符串。
+ * 
+ * 参数：
+ *   - provider: 提供商名称（aliyun, deepseek, glm）
  * 
  * 返回：
  *   - 当前配置的 API_KEY
+ * @param {string} provider
  * @returns {$CancellablePromise<string>}
  */
-export function GetAPIKey() {
-    return $Call.ByID(681475326);
+export function GetAPIKey(provider) {
+    return $Call.ByID(681475326, provider);
+}
+
+/**
+ * GetAllAPIKeys 获取所有提供商的 API Keys
+ * 
+ * 返回：
+ *   - map[string]string{provider: api_key}
+ * @returns {$CancellablePromise<{ [_ in string]?: string }>}
+ */
+export function GetAllAPIKeys() {
+    return $Call.ByID(1123785736).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
 }
 
 /**
@@ -196,15 +213,16 @@ export function RollbackSessionMessages(scopeType, bookPath, sessionID, n) {
 }
 
 /**
- * SaveAPIKey 保存新的 API 密钥到配置文件
+ * SaveAPIKey 保存指定提供商的 API 密钥到配置文件
  * 
  * 流程：
  *  1. 验证新 API_KEY 是否有效（创建临时 client 测试连接）
  *  2. 保存到配置文件（同时更新内存缓存）
- *  3. 替换当前 client 对象
+ *  3. 如果当前 provider 匹配，替换当前 client 对象
  *  4. 重置 conversation（会在下次 ensureConversationLocked 时重建）
  * 
  * 参数：
+ *   - provider: 提供商名称（aliyun, deepseek, glm）
  *   - apiKey: 新的 API 密钥
  * 
  * 返回：
@@ -213,11 +231,12 @@ export function RollbackSessionMessages(scopeType, bookPath, sessionID, n) {
  * 注意：
  *   - 如果 API_KEY 无效，保存失败且不会修改现有 client
  *   - 保存成功后，后续对话会自动使用新的 API_KEY
+ * @param {string} provider
  * @param {string} apiKey
  * @returns {$CancellablePromise<void>}
  */
-export function SaveAPIKey(apiKey) {
-    return $Call.ByID(3119252441, apiKey);
+export function SaveAPIKey(provider, apiKey) {
+    return $Call.ByID(3119252441, provider, apiKey);
 }
 
 /**

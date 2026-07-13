@@ -13,29 +13,49 @@ import (
 // API Key 管理
 // ============================================================================
 
-// GetAPIKey 从缓存配置中读取 API 密钥
+// GetAPIKey 从缓存配置中读取指定提供商的 API 密钥
 //
 // 无需重新加载文件，直接使用内存中的单例缓存。
-// 如果配置未初始化，返回空字符串。
+// 如果配置未初始化或该提供商没有配置 key，返回空字符串。
+//
+// 参数：
+//   - provider: 提供商名称（aliyun, deepseek, glm）
 //
 // 返回：
 //   - 当前配置的 API_KEY
-func (c *ChatService) GetAPIKey() string {
-	if c.config == nil {
+func (c *ChatService) GetAPIKey(provider string) string {
+	if c.config == nil || c.config.APIKeys == nil {
 		return ""
 	}
-	return c.config.API_KEY
+	return c.config.APIKeys[provider]
 }
 
-// SaveAPIKey 保存新的 API 密钥到配置文件
+// GetAllAPIKeys 获取所有提供商的 API Keys
+//
+// 返回：
+//   - map[string]string{provider: api_key}
+func (c *ChatService) GetAllAPIKeys() map[string]string {
+	if c.config == nil || c.config.APIKeys == nil {
+		return make(map[string]string)
+	}
+	// 返回副本，避免外部修改
+	keys := make(map[string]string)
+	for k, v := range c.config.APIKeys {
+		keys[k] = v
+	}
+	return keys
+}
+
+// SaveAPIKey 保存指定提供商的 API 密钥到配置文件
 //
 // 流程：
 //  1. 验证新 API_KEY 是否有效（创建临时 client 测试连接）
 //  2. 保存到配置文件（同时更新内存缓存）
-//  3. 替换当前 client 对象
+//  3. 如果当前 provider 匹配，替换当前 client 对象
 //  4. 重置 conversation（会在下次 ensureConversationLocked 时重建）
 //
 // 参数：
+//   - provider: 提供商名称（aliyun, deepseek, glm）
 //   - apiKey: 新的 API 密钥
 //
 // 返回：
@@ -44,18 +64,17 @@ func (c *ChatService) GetAPIKey() string {
 // 注意：
 //   - 如果 API_KEY 无效，保存失败且不会修改现有 client
 //   - 保存成功后，后续对话会自动使用新的 API_KEY
-func (c *ChatService) SaveAPIKey(apiKey string) error {
+func (c *ChatService) SaveAPIKey(provider string, apiKey string) error {
 	cleanKey := strings.TrimSpace(apiKey)
 	if cleanKey == "" {
 		return fmt.Errorf("api key cannot be empty")
 	}
 
-	// 先验证 API_KEY 是否有效（创建临时 client）
-	provider := c.config.Provider
 	if provider == "" {
-		provider = string(defaultProvider)
+		return fmt.Errorf("provider cannot be empty")
 	}
 
+	// 先验证 API_KEY 是否有效（创建临时 client）
 	model := c.config.Model
 	if model == "" {
 		model = defaultModel
@@ -70,18 +89,25 @@ func (c *ChatService) SaveAPIKey(apiKey string) error {
 		return fmt.Errorf("invalid api key: %w", err)
 	}
 
+	// 确保 APIKeys map 已初始化
+	if c.config.APIKeys == nil {
+		c.config.APIKeys = make(map[string]string)
+	}
+
 	// 保存到配置文件（同时更新内存缓存）
-	c.config.API_KEY = cleanKey
+	c.config.APIKeys[provider] = cleanKey
 	if err := c.config.SaveToFile(); err != nil {
 		return err
 	}
 
-	// 更新 client 并重置 conversation
+	// 如果当前 provider 匹配，更新 client 并重置 conversation
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.client = newClient
-	c.conversation = nil
+	if c.config.Provider == provider {
+		c.client = newClient
+		c.conversation = nil
+	}
 
 	return nil
 }
@@ -153,10 +179,16 @@ func (c *ChatService) SaveModelConfig(config map[string]string) error {
 	}
 
 	// 如果 client 已初始化，需要重新创建以使用新配置
-	if c.client != nil && c.config.API_KEY != "" {
+	// 获取当前 provider 对应的 API key
+	apiKey := ""
+	if c.config.APIKeys != nil {
+		apiKey = c.config.APIKeys[provider]
+	}
+
+	if c.client != nil && apiKey != "" {
 		newClient, err := llmkit.NewClient(llmkit.Config{
 			Provider: llmkit.ProviderType(provider),
-			APIKey:   c.config.API_KEY,
+			APIKey:   apiKey,
 			Model:    model,
 		})
 		if err == nil {
