@@ -1,4 +1,5 @@
 import { ref,onMounted, onBeforeUnmount, reactive } from "vue";
+import * as pdfjsLib from 'pdfjs-dist';
 
 /**
  * usePdfPages - PDF 页面管理与渲染 Composable
@@ -78,6 +79,12 @@ export function usePdfPages(
         // devicePixelRatio 是一个表示设备像素与CSS像素之间关系的值。对于普通屏幕，这个值通常是1；
         // 对于高DPI屏幕（如Retina显示屏），这个值可能是2或更高。这意味着在高DPI屏幕上，每个CSS像素实际上由多个物理像素组成。
         const outputScale = (window.devicePixelRatio || 1) * 1.2;
+        
+        // ⭐ 关键：设置 --total-scale-factor CSS 变量，用于 TextLayer 字体缩放
+        if (pdfCanvas.value) {
+            pdfCanvas.value.style.setProperty('--total-scale-factor', scale.toString());
+        }
+        
         return { viewport, outputScale };
     };
 
@@ -185,12 +192,12 @@ export function usePdfPages(
 
             // 渲染文本层用于选择
             if (textLayer) {
-            try {
-                const textContent = await page.getTextContent();
-                RenderTextLayer(textContent, viewport, textLayer);
-            } catch (e) {
-                console.warn('RenderTextLayer failed', e);
-            }
+                try {
+                    const textContent = await page.getTextContent();
+                    await RenderTextLayer(textContent, viewport, textLayer);
+                } catch (e) {
+                    console.warn('RenderTextLayer failed', e);
+                }
             }
 
             console.log(`第 ${pageNum} 页渲染完成`);
@@ -209,56 +216,33 @@ export function usePdfPages(
     
     /**
      * 渲染 PDF 文本层（DOM，用于选择/复制）
+     * 使用 PDF.js 内置的 TextLayer 以确保精确的文本定位
      * @param {Object} textContent - page.getTextContent() 的结果
      * @param {PDFPageViewport} viewport - 与 canvas 使用的同一个 viewport
      * @param {HTMLElement} textLayer - .pdf-text-layer 元素
      */
-    const RenderTextLayer = (textContent, viewport, textLayer) => {
+    const RenderTextLayer = async (textContent, viewport, textLayer) => {
         if (!textLayer) return;
 
+        // 清空之前的文本层内容
         textLayer.innerHTML = '';
-        textLayer.style.width = viewport.width + 'px';
-        textLayer.style.height = viewport.height + 'px';
-
-        const viewportTransform = viewport.transform;
-
-        for (const item of textContent.items) {
-            if (!item.str) continue;
-
-            const span = document.createElement('span');
-            span.textContent = item.str;
-
-            // PDF → viewport
-            const tx = pdfjsLib.Util.transform(
-            viewportTransform,
-            item.transform
-            );
-
-            let [a, b, c, d, e, f] = tx;
-
-            // ⭐ 关键：基线 → 左上角修正
-            const ascent = item.height * 0.8;
-            f -= ascent;
-            // ⭐ 核心：只修正文字方向，不翻整页
-            c = -c;
-            d = -d;
-
-            span.style.transform = `matrix(${a}, ${b}, ${c}, ${d}, ${e}, ${f})`;
-            span.style.transformOrigin = '0 0';
-
-            const font = textContent.styles[item.fontName];
-            if (font?.fontFamily) {
-            span.style.fontFamily = font.fontFamily;
-            }
-
-            span.style.fontSize = '1px';
-            span.style.lineHeight = '1';
-            span.style.position = 'absolute';
-            span.style.whiteSpace = 'pre';
-            span.style.userSelect = 'text';
-            span.style.webkitUserSelect = 'text';
-
-            textLayer.appendChild(span);
+        
+        try {
+            // 动态导入 TextLayer（避免构建时的模块解析问题）
+            const pdfModule = await import('pdfjs-dist/build/pdf.mjs');
+            const TextLayer = pdfModule.TextLayer;
+            
+            // 使用 PDF.js 内置的 TextLayer 进行渲染
+            const textLayerInstance = new TextLayer({
+                textContentSource: textContent,
+                container: textLayer,
+                viewport: viewport,
+            });
+            
+            await textLayerInstance.render();
+            console.log('TextLayer 渲染成功');
+        } catch (error) {
+            console.error('TextLayer 渲染失败:', error);
         }
     };
 

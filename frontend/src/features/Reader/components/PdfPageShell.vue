@@ -101,7 +101,7 @@ const handlePinRemove = (annotationId) => {
 <template>
   <div ref="container" class="pdf-page-container" :data-page-num="pageNum">
     <canvas ref="canvas" class="pdf-page-canvas"></canvas>
-    <div ref="textLayer" class="pdf-text-layer"></div>
+    <div ref="textLayer" class="textLayer"></div>
     
     <!-- 渲染当前页的大头针 -->
     <AnnotationPin
@@ -137,7 +137,7 @@ const handlePinRemove = (annotationId) => {
   z-index: 1;
 }
 
-.pdf-text-layer {
+.textLayer {
   position: absolute;
   left: 0;
   top: 0;
@@ -148,16 +148,41 @@ const handlePinRemove = (annotationId) => {
   -webkit-user-select: text;
   z-index: 2;
   color: transparent;
+  /* PDF.js TextLayer 必需样式 */
+  --csstools-color-scheme--light: initial;
+  color-scheme: only light;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  -webkit-text-size-adjust: none;
+  -moz-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  /* PDF.js TextLayer 字体缩放变量 */
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor, 1) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
 }
 
-.pdf-text-layer span {
+.textLayer :is(span, br) {
+  color: transparent;
   position: absolute;
   white-space: pre;
-  transform-origin: 0 0;
-  line-height: 1;
+  cursor: text;
+  transform-origin: 0% 0%;
   user-select: text;
   -webkit-user-select: text;
-  cursor: text;
+  /* PDF.js TextLayer 字体大小控制 */
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
 }
 
 </style>
