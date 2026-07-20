@@ -252,6 +252,16 @@ onMounted(() => {
   }
 });
 
+// ⭐ 关键：组件卸载时清理 PDF.js 创建的 hidden canvas
+onBeforeUnmount(() => {
+  // 清理 PDF.js 创建的隐藏 canvas 元素
+  const hiddenCanvases = document.querySelectorAll('.hiddenCanvasElement');
+  hiddenCanvases.forEach(canvas => {
+    canvas.remove();
+  });
+  console.log(`清理了 ${hiddenCanvases.length} 个隐藏的 canvas 元素`);
+});
+
 // ========================================
 // 大头针辅助函数
 // ========================================

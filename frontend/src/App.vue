@@ -503,11 +503,26 @@ body {
   overflow: hidden; /* 防止整个页面滚动 */
 }
 
+/* ⭐ 关键：隐藏 PDF.js 创建的 hidden canvas 元素，防止影响布局 */
+.hiddenCanvasElement {
+  position: absolute !important;
+  width: 0 !important;
+  height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  z-index: -9999 !important;
+}
+
 .app-container {
   display: flex;
   flex-direction: column;
   height: 100vh;
   width: 100%;
+  position: relative; /* 确保定位上下文 */
+  overflow: hidden; /* 防止内容溢出 */
 }
 
 /* --- 头部样式 --- */
