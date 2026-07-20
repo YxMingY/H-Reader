@@ -20,12 +20,14 @@ import {
   useScreenshot,
   useReadingProgress,
   useAnnotations,
+  useFormulaNavigation,
   findPageByPoint
 } from './composables';
 
 // 导入页面渲染组件
 import PdfPageShell from './components/PdfPageShell.vue';
 import AnnotationPin from './components/AnnotationPin.vue';
+import FormulaPreview from './components/FormulaPreview.vue';
 
 // 定义组件属性
 const props = defineProps({
@@ -95,6 +97,29 @@ const { captureCurrentPage, startAreaSelection } = useScreenshot(currentPage, pa
  * - 通过 watch 监听 props 变化并同步更新
  */
 const bookPathRef = ref(props.bookPath || '');
+
+// ========================================
+// 公式导航管理
+// ========================================
+
+const {
+  selectedFormula,
+  showFormulaPopup,
+  popupPosition,
+  hasJumped,
+  extractFormulas,
+  setupSelectionListener,
+  jumpToFormula,
+  returnToPreviousPosition,
+  cleanup: cleanupFormulaNav,
+} = useFormulaNavigation({
+  pdfDoc,
+  totalPages,
+  readerContainer,
+  pageContainerRefs,
+  pageCanvasRefs,
+  GoToPage,
+});
 
 // ========================================
 // 大头针标注管理
@@ -201,6 +226,10 @@ const loadPdf = async (source) => {
       await loadAnnotations();
     }
     
+    // 步骤 8.6: 提取公式编号并设置选择监听
+    await extractFormulas();
+    setupSelectionListener();
+    
     // 步骤 9: 恢复阅读进度（如果有保存的进度）
     if (bookPathRef.value) {
       const savedPage = await restoreProgress();
@@ -254,6 +283,9 @@ onMounted(() => {
 
 // ⭐ 关键：组件卸载时清理 PDF.js 创建的 hidden canvas
 onBeforeUnmount(() => {
+  // 清理公式导航监听
+  cleanupFormulaNav();
+  
   // 清理 PDF.js 创建的隐藏 canvas 元素
   const hiddenCanvases = document.querySelectorAll('.hiddenCanvasElement');
   hiddenCanvases.forEach(canvas => {
@@ -392,6 +424,9 @@ defineExpose({
   startSelectionMode,     // 开始选择模式
   cancelSelectionMode,    // 取消选择模式
   handlePageClick,        // 处理页面点击（创建大头针）
+  // 公式导航
+  jumpToFormula,          // 跳转到公式位置
+  returnToPreviousPosition, // 返回跳转前位置
 });
 
 </script>
@@ -421,6 +456,17 @@ defineExpose({
         @pin-remove="handleRemoveAnnotation"
       />
     </div>
+    
+    <!-- 公式预览悬浮窗 -->
+    <FormulaPreview
+      v-if="showFormulaPopup && selectedFormula"
+      :formula="selectedFormula"
+      :position="popupPosition"
+      :has-jumped="hasJumped"
+      @jump="jumpToFormula"
+      @return="returnToPreviousPosition"
+      @close="showFormulaPopup = false"
+    />
   </div>
 </template>
 
