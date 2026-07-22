@@ -205,6 +205,8 @@ export function useFormulaNavigation({
     removeOutsideClickListener();
     outsideClickHandler = (e) => {
       if (e.target.closest('.formula-preview-popup')) return;
+      // 跳转后仅允许通过"返回"按钮关闭，外部点击不关闭
+      if (hasJumped.value) return;
       showFormulaPopup.value = false;
     };
     // 用 setTimeout 避免当前 selection 事件触发关闭
