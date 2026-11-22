@@ -24,7 +24,7 @@
 // - 懒加载：应用启动不立即加载，首次访问时才初始化
 // - 失败容错：文件缺失或错误时自动创建空配置
 //
-// 存储路径：./config.json（应用工作目录）
+// macOS 和 Windows 使用用户配置目录，其他平台使用应用工作目录。
 //
 // 配置格式：
 //
@@ -38,7 +38,12 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
 	"os"
+	"path/filepath"
+	"runtime"
 	"sync"
 )
 
@@ -96,6 +101,7 @@ func GetConfig() *Config {
 		globalConfig = cfg
 	} else {
 		// 文件不存在或加载失败，创建空配置
+		log.Printf("load config: %v", err)
 		globalConfig = &Config{}
 	}
 	return globalConfig
@@ -126,8 +132,38 @@ func InvalidateConfigCache() {
 	globalConfig = nil
 }
 
-func (c *Config) GetConfigFilePath() string {
-	return "config.json"
+const configFileName = "config.json"
+
+func configFilePath() (string, error) {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+		return filepath.Abs(configFileName)
+	}
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("locate user configuration directory: %w", err)
+	}
+	if !filepath.IsAbs(dir) {
+		return "", fmt.Errorf("user configuration directory must be absolute: %q", dir)
+	}
+	return filepath.Join(dir, "hreader", configFileName), nil
+}
+
+func legacyConfigPaths() []string {
+	var paths []string
+	if cwd, err := os.Getwd(); err == nil {
+		paths = append(paths, filepath.Join(cwd, configFileName))
+	}
+	if executable, err := os.Executable(); err == nil {
+		dir := filepath.Dir(executable)
+		paths = append(paths, filepath.Join(dir, configFileName))
+		contents := filepath.Dir(dir)
+		bundle := filepath.Dir(contents)
+		if runtime.GOOS == "darwin" && filepath.Ext(bundle) == ".app" &&
+			filepath.Base(dir) == "MacOS" && filepath.Base(contents) == "Contents" {
+			paths = append(paths, filepath.Join(filepath.Dir(bundle), configFileName))
+		}
+	}
+	return paths
 }
 
 // LoadConfig 加载配置文件到新实例（不使用全局单例）
@@ -155,72 +191,97 @@ func LoadConfig() (*Config, error) {
 	return config, nil
 }
 
-// LoadFromFile 从配置文件加载数据到当前Config对象
-//
-// 行为：
-// - 文件存在：加载JSON并反序列化到当前Config
-// - 文件不存在：创建空config.json文件并返回nil
-// - 其他错误：返回读取或解析错误
-//
-// 注意：此方法会修改接收者对象，通常不需要直接调用
+// LoadFromFile loads the current configuration or imports an older configuration
+// when the destination file is missing.
 func (c *Config) LoadFromFile() error {
-	filePath := c.GetConfigFilePath()
-	// 如果文件不存在，返回一个空配置，并创建一个新的配置文件
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		emptyConfig := &Config{}
-		err := emptyConfig.SaveToFile()
-		if err != nil {
-			return err
-		}
-		return nil
-	}
-	data, err := os.ReadFile(filePath)
+	path, err := configFilePath()
 	if err != nil {
 		return err
 	}
-
-	if err := json.Unmarshal(data, c); err != nil {
+	data, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+			for _, legacyPath := range legacyConfigPaths() {
+				if legacyPath == path {
+					continue
+				}
+				data, err := os.ReadFile(legacyPath)
+				if errors.Is(err, os.ErrNotExist) {
+					continue
+				}
+				var legacy Config
+				if err == nil {
+					_, err = legacy.decode(data)
+				}
+				if err != nil {
+					log.Printf("load legacy config %q: %v", legacyPath, err)
+					continue
+				}
+				*c = legacy
+				if err := c.SaveToFile(); err != nil {
+					log.Printf("migrate legacy config %q: %v", legacyPath, err)
+				}
+				return nil
+			}
+		}
+		return c.SaveToFile()
+	}
+	if err != nil {
 		return err
 	}
+	upgraded, err := c.decode(data)
+	if upgraded {
+		if saveErr := c.SaveToFile(); saveErr != nil {
+			log.Print(saveErr)
+		}
+	}
+	return err
+}
 
-	// 确保 api_keys 不为 nil
+func (c *Config) decode(data []byte) (bool, error) {
+	if err := json.Unmarshal(data, c); err != nil {
+		return false, err
+	}
 	if c.APIKeys == nil {
 		c.APIKeys = make(map[string]string)
 	}
-
-	// 自动迁移逻辑：如果旧的 api_key 有值但 api_keys 为空，自动迁移
 	if c.APIKey != "" && len(c.APIKeys) == 0 {
-		// 默认迁移到 aliyun（因为之前只有一个 key）
 		c.APIKeys["aliyun"] = c.APIKey
-		c.APIKey = "" // 清空旧字段
-		// 自动保存迁移后的配置
-		c.SaveToFile()
+		c.APIKey = ""
+		return true, nil
 	}
+	return false, nil
+}
 
+// SaveToFile replaces the configuration with a private file in the same directory.
+func (c *Config) SaveToFile() error {
+	path, err := configFilePath()
+	if err != nil {
+		return err
+	}
+	if err := c.save(path); err != nil {
+		return fmt.Errorf("save config %q: %w", path, err)
+	}
 	return nil
 }
 
-// SaveToFile 将当前Config对象序列化为JSON并写入config.json
-//
-// 使用场景：
-// - 更新API_KEY后需要持久化：cfg.API_KEY = "key"; cfg.SaveToFile()
-// - 修改任何配置字段后需要保存到文件
-//
-// 注意：
-// - 使用原子写入（temp file + rename）保证数据一致性
-// - 文件权限为644（所有者读写，其他人只读）
-//
-// 示例：
-//
-//	cfg := GetConfig()
-//	cfg.API_KEY = "new_api_key"
-//	if err := cfg.SaveToFile(); err != nil {
-//	    log.Fatalf("Failed to save config: %v", err)
-//	}
-func (c *Config) SaveToFile() error {
+func (c *Config) save(path string) error {
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(c.GetConfigFilePath(), data, 0644)
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
+	}
+	file, err := os.CreateTemp(dir, ".config-*.json")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(file.Name())
+	_, writeErr := file.Write(data)
+	if err := errors.Join(writeErr, file.Close()); err != nil {
+		return err
+	}
+	return os.Rename(file.Name(), path)
 }

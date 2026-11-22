@@ -35,7 +35,7 @@
               class="settings-select"
               @change="onProviderChange"
             >
-              <option value="aliyun">阿里云通义千问</option>
+              <option value="aliyun">阿里云百炼</option>
               <option value="deepseek">DeepSeek</option>
               <option value="glm">智谱 GLM</option>
             </select>
@@ -100,7 +100,7 @@ const props = defineProps({
   },
   model: {
     type: String,
-    default: 'qwen3-omni-flash',
+    default: 'qwen3.8-flash',
   },
 });
 
@@ -112,33 +112,30 @@ const draftApiKeys = ref({
   glm: '',
 });
 const draftProvider = ref('aliyun');
-const draftModel = ref('qwen3-omni-flash');
+const draftModel = ref('qwen3.8-flash');
 const customModelName = ref('');
 
 // 各提供商的可用模型列表
 const modelOptions = {
   aliyun: [
-    { value: 'qwen3.7-plus', label: '通义千问 3.7 Plus' },
-    { value: 'qwen3.6-plus', label: '通义千问 3.6 Plus' },
-    { value: 'qwen3.5-omni-plus-2026-03-15', label: '通义千问 3.5 Omni Plus （新）(多模态)', multimodal: true },
-    { value: 'qwen3.7-max', label: '通义千问 3.7 Max' },
-    { value: 'Qwen3.5-Plus', label: '通义千问 3.5 Plus' },
-    { value: 'qwen3-omni-flash', label: '通义千问 Omni Flash (多模态)', multimodal: true },
-    { value: 'qwen3.5-omni-plus', label: '通义千问 3.5 Omni Plus (多模态)', multimodal: true },
-    { value: 'qwen-turbo', label: '通义千问 Turbo' },
-    { value: 'qwen-plus', label: '通义千问 Plus' },
-    { value: 'qwen-max', label: '通义千问 Max' },
+    { value: 'qwen3.8-flash', label: 'Qwen 3.8 Flash', multimodal: true },
+    { value: 'qwen4-max', label: 'Qwen 4 Max', multimodal: true },
+    { value: 'qwen3.8-max-0902', label: 'Qwen 3.8 Max (0902)' },
+    { value: 'qwen3.7-plus', label: 'Qwen 3.7 Plus', multimodal: true },
+    { value: 'kimi-k3.1-pro', label: 'Kimi K3.1 Pro' },
+    { value: 'deepseek-v4.1-flash-1017', label: 'DeepSeek V4.1 Flash (1017)' },
+    { value: 'deepseek-v4.1-flash', label: 'DeepSeek V4.1 Flash' },
+    { value: 'glm-5.3', label: 'GLM-5.3' },
   ],
   deepseek: [
-    { value: 'deepseek-chat', label: 'DeepSeek Chat' },
-    { value: 'deepseek-coder', label: 'DeepSeek Coder' },
-    { value: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash' },
+    { value: 'deepseek-flash', label: 'DeepSeek V4.1 Flash', multimodal: true },
     { value: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro' },
   ],
   glm: [
-    { value: 'glm-4', label: 'GLM-4 (多模态)', multimodal: true },
-    { value: 'glm-4-plus', label: 'GLM-4 Plus (多模态)', multimodal: true },
-    { value: 'glm-3-turbo', label: 'GLM-3 Turbo' },
+    { value: 'glm-5.3-flash', label: 'GLM-5.3 Flash', multimodal: true },
+    { value: 'glm-5.3-flashx', label: 'GLM-5.3 FlashX', multimodal: true },
+    { value: 'glm-5.3', label: 'GLM-5.3' },
+    { value: 'glm-5.2', label: 'GLM-5.2' },
   ],
 };
 
@@ -163,7 +160,7 @@ watch(
         glm: props.apiKeys?.glm || '',
       };
       draftProvider.value = props.provider || 'aliyun';
-      draftModel.value = props.model || 'qwen3-omni-flash';
+      draftModel.value = props.model || 'qwen3.8-flash';
       // 检查当前模型是否在预设列表中，如果不在则设为自定义
       const isInList = availableModels.value.some(m => m.value === draftModel.value);
       if (!isInList && draftModel.value) {

@@ -20,7 +20,7 @@ export function useAppSettings({ bookshelfRef, chatService }) {
     glm: '',
   });
   const modelProvider = ref('aliyun');
-  const modelName = ref('qwen3-omni-flash');
+  const modelName = ref('qwen3.8-flash');
   const settingsOpen = ref(false);
 
   /**

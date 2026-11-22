@@ -45,7 +45,7 @@ func NewClient(cfg Config) (*Client, error) {
 		switch strings.ToLower(string(cfg.Provider)) {
 		case string(ProviderOpenAI):
 			config.BaseURL = "https://api.openai.com/v1/"
-		case string(ProviderZhipu):
+		case string(ProviderZhipu), "glm":
 			config.BaseURL = "https://open.bigmodel.cn/api/paas/v4/"
 		case string(ProviderAliyun):
 			config.BaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1/"

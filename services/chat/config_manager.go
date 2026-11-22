@@ -74,6 +74,9 @@ func (c *ChatService) SaveAPIKey(provider string, apiKey string) error {
 		return fmt.Errorf("provider cannot be empty")
 	}
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	// 先验证 API_KEY 是否有效（创建临时 client）
 	model := c.config.Model
 	if model == "" {
@@ -95,14 +98,18 @@ func (c *ChatService) SaveAPIKey(provider string, apiKey string) error {
 	}
 
 	// 保存到配置文件（同时更新内存缓存）
+	previousKey, hadKey := c.config.APIKeys[provider]
 	c.config.APIKeys[provider] = cleanKey
 	if err := c.config.SaveToFile(); err != nil {
+		if hadKey {
+			c.config.APIKeys[provider] = previousKey
+		} else {
+			delete(c.config.APIKeys, provider)
+		}
 		return err
 	}
 
 	// 如果当前 provider 匹配，更新 client 并重置 conversation
-	c.mu.Lock()
-	defer c.mu.Unlock()
 
 	if c.config.Provider == provider {
 		c.client = newClient
@@ -120,7 +127,7 @@ func (c *ChatService) SaveAPIKey(provider string, apiKey string) error {
 //
 // 返回：
 //   - map[string]string{"provider": 提供商, "model": 模型名称}
-//   - 如果配置未初始化，返回默认值（aliyun, qwen3-omni-flash）
+//   - 如果配置未初始化，返回默认值（aliyun, qwen3.8-flash）
 func (c *ChatService) GetModelConfig() map[string]string {
 	if c.config == nil {
 		return map[string]string{
@@ -153,7 +160,7 @@ func (c *ChatService) GetModelConfig() map[string]string {
 // 流程：
 //  1. 更新内存中的配置
 //  2. 保存到文件
-//  3. 如果 client 已初始化，重新创建以使用新配置
+//  3. 使用所选提供商的 API Key 更新 client
 //  4. 重置 conversation（下次对话时重建）
 //
 // 返回：
@@ -169,33 +176,28 @@ func (c *ChatService) SaveModelConfig(config map[string]string) error {
 	provider := config["provider"]
 	model := config["model"]
 
-	// 更新配置
-	c.config.Provider = provider
-	c.config.Model = model
-
-	// 保存到文件
-	if err := c.config.SaveToFile(); err != nil {
-		return err
-	}
-
-	// 如果 client 已初始化，需要重新创建以使用新配置
-	// 获取当前 provider 对应的 API key
-	apiKey := ""
-	if c.config.APIKeys != nil {
-		apiKey = c.config.APIKeys[provider]
-	}
-
-	if c.client != nil && apiKey != "" {
-		newClient, err := llmkit.NewClient(llmkit.Config{
+	var client *llmkit.Client
+	if apiKey := c.config.APIKeys[provider]; apiKey != "" {
+		var err error
+		client, err = llmkit.NewClient(llmkit.Config{
 			Provider: llmkit.ProviderType(provider),
 			APIKey:   apiKey,
 			Model:    model,
 		})
-		if err == nil {
-			c.client = newClient
-			c.conversation = nil // 重置会话
+		if err != nil {
+			return err
 		}
 	}
+
+	previousProvider, previousModel := c.config.Provider, c.config.Model
+	c.config.Provider, c.config.Model = provider, model
+	if err := c.config.SaveToFile(); err != nil {
+		c.config.Provider, c.config.Model = previousProvider, previousModel
+		return err
+	}
+
+	c.client = client
+	c.conversation = nil
 
 	return nil
 }

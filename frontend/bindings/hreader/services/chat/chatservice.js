@@ -108,7 +108,7 @@ export function GetAllAPIKeys() {
  * 
  * 返回：
  *   - map[string]string{"provider": 提供商, "model": 模型名称}
- *   - 如果配置未初始化，返回默认值（aliyun, qwen3-omni-flash）
+ *   - 如果配置未初始化，返回默认值（aliyun, qwen3.8-flash）
  * @returns {$CancellablePromise<{ [_ in string]?: string }>}
  */
 export function GetModelConfig() {
@@ -248,7 +248,7 @@ export function SaveAPIKey(provider, apiKey) {
  * 流程：
  *  1. 更新内存中的配置
  *  2. 保存到文件
- *  3. 如果 client 已初始化，重新创建以使用新配置
+ *  3. 使用所选提供商的 API Key 更新 client
  *  4. 重置 conversation（下次对话时重建）
  * 
  * 返回：
