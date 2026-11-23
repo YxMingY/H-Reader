@@ -1,5 +1,6 @@
-import { ref,onMounted, onBeforeUnmount, reactive } from "vue";
-import * as pdfjsLib from 'pdfjs-dist';
+import { ref, onBeforeUnmount } from "vue";
+import 'pdfjs-dist';
+import { TextLayerBuilder } from 'pdfjs-dist/web/pdf_viewer.mjs';
 
 /**
  * usePdfPages - PDF 页面管理与渲染 Composable
@@ -22,6 +23,8 @@ export function usePdfPages(
 
     const renderingPages = ref(new Set()); // 正在渲染的页码集合，避免重复渲染
     const currentPages = ref(new Set());   // 当前可见的页码集合
+    const textLayers = new Map();
+    const renderJobs = new Map();
     const renderTasks = new Map();         // 存储每个页面的渲染任务，用于取消
 
     const pageWidth = ref(600); // 统一管理页面宽度，所有缩放路径都通过修改它来触发重新渲染
@@ -30,6 +33,22 @@ export function usePdfPages(
     let renderTimeout = null;   // 渲染节流定时器
 
     const RENDER_THROTTLE = 200; // 渲染节流时间（毫秒）
+
+    const removeTextLayer = (pageNum) => {
+        const layer = textLayers.get(pageNum);
+        if (!layer) return;
+        layer.cancel();
+        layer.div.remove();
+        textLayers.delete(pageNum);
+    };
+
+    const cancelPageRender = (pageNum) => {
+        renderJobs.delete(pageNum);
+        renderTasks.get(pageNum)?.cancel();
+        renderTasks.delete(pageNum);
+        renderingPages.value.delete(pageNum);
+        removeTextLayer(pageNum);
+    };
 
     /**
      * 注册页面 DOM 引用
@@ -43,6 +62,7 @@ export function usePdfPages(
             pageTextLayerRefs[pageNum] = els.textLayer;
             
         } else {
+            cancelPageRender(pageNum);
             // 清除引用
             delete pageContainerRefs[pageNum];
             delete pageCanvasRefs[pageNum];
@@ -51,17 +71,16 @@ export function usePdfPages(
     }
 
     /**
-     * 清除所有页面数据和引用
+     * 清除文档渲染状态，DOM 引用由组件的挂载和卸载管理
      */
     const ClearPages = async () => { 
-        console.log('Clearing pages...');
+        if (renderTimeout) clearTimeout(renderTimeout);
+        pageObserver?.disconnect();
+        for (const pageNum of new Set([...renderJobs.keys(), ...textLayers.keys()])) {
+            cancelPageRender(pageNum);
+        }
         currentPages.value.clear();
         renderingPages.value.clear();
-
-        // 清理旧的 refs
-        Object.keys(pageCanvasRefs).forEach(key => delete pageCanvasRefs[key]);
-        Object.keys(pageTextLayerRefs).forEach(key => delete pageTextLayerRefs[key]);
-        Object.keys(pageContainerRefs).forEach(key => delete pageContainerRefs[key]);
     };
 
     /**
@@ -79,11 +98,6 @@ export function usePdfPages(
         // devicePixelRatio 是一个表示设备像素与CSS像素之间关系的值。对于普通屏幕，这个值通常是1；
         // 对于高DPI屏幕（如Retina显示屏），这个值可能是2或更高。这意味着在高DPI屏幕上，每个CSS像素实际上由多个物理像素组成。
         const outputScale = (window.devicePixelRatio || 1) * 1.2;
-        
-        // ⭐ 关键：设置 --total-scale-factor CSS 变量，用于 TextLayer 字体缩放
-        if (pdfCanvas.value) {
-            pdfCanvas.value.style.setProperty('--total-scale-factor', scale.toString());
-        }
         
         return { viewport, outputScale };
     };
@@ -128,26 +142,19 @@ export function usePdfPages(
         console.log(`开始渲染第 ${pageNum} 页`);
         // 标记正在渲染的页码，避免重复渲染
         renderingPages.value.add(pageNum);
+        const job = {};
+        renderJobs.set(pageNum, job);
         
         try {
             // 获取 PDF 页面对象
             const page = await pdfDoc.value.getPage(pageNum);
+            if (renderJobs.get(pageNum) !== job) return;
             const canvas = pageCanvasRefs[pageNum];
             const textLayer = pageTextLayerRefs[pageNum];
             const pageContainer = pageContainerRefs[pageNum];
             if (!canvas) {
                 console.warn(`第 ${pageNum} 页的 canvas 不存在`);
                 return;
-            }
-
-            // ⚠️ 关键修复：如果存在之前的渲染任务，先取消它
-            if (renderTasks.has(pageNum)) {
-                const previousTask = renderTasks.get(pageNum);
-                if (previousTask && typeof previousTask.cancel === 'function') {
-                    console.log(`取消第 ${pageNum} 页的旧渲染任务`);
-                    previousTask.cancel();
-                }
-                renderTasks.delete(pageNum);
             }
 
             // 计算页面视口和输出缩放比例
@@ -183,6 +190,7 @@ export function usePdfPages(
             const renderTask = page.render(renderContext);
             renderTasks.set(pageNum, renderTask); // 存储渲染任务
             await renderTask.promise;
+            if (renderJobs.get(pageNum) !== job) return;
             renderTasks.delete(pageNum); // 渲染完成后清除任务引用
 
             // 渲染完成后再回写容器高度，防止页面之间重叠
@@ -190,59 +198,32 @@ export function usePdfPages(
                 pageContainer.style.height = canvas.style.height;
             }
 
-            // 渲染文本层用于选择
             if (textLayer) {
-                try {
-                    const textContent = await page.getTextContent();
-                    await RenderTextLayer(textContent, viewport, textLayer);
-                } catch (e) {
-                    console.warn('RenderTextLayer failed', e);
-                }
+                removeTextLayer(pageNum);
+                const layer = new TextLayerBuilder({
+                    pdfPage: page,
+                    onAppend: (div) => {
+                        if (renderJobs.get(pageNum) === job) textLayer.append(div);
+                    },
+                });
+                layer.div.style.setProperty('--total-scale-factor', viewport.scale * viewport.userUnit);
+                textLayers.set(pageNum, layer);
+                await layer.render({ viewport });
+                if (renderJobs.get(pageNum) !== job) layer.cancel();
             }
 
             console.log(`第 ${pageNum} 页渲染完成`);
         } catch (err) {
             // 如果是取消操作导致的错误，静默处理
-            if (err.name !== 'RenderingCancelledException') {
+            if (renderJobs.get(pageNum) === job && err.name !== 'RenderingCancelledException') {
                 console.error(`渲染第 ${pageNum} 页失败:`, err);
             }
         } finally {
-            // 从正在渲染集合中移除该页面
-            renderingPages.value.delete(pageNum);
-            renderTasks.delete(pageNum); // 确保清除任务引用
-        }
-    };
-
-    
-    /**
-     * 渲染 PDF 文本层（DOM，用于选择/复制）
-     * 使用 PDF.js 内置的 TextLayer 以确保精确的文本定位
-     * @param {Object} textContent - page.getTextContent() 的结果
-     * @param {PDFPageViewport} viewport - 与 canvas 使用的同一个 viewport
-     * @param {HTMLElement} textLayer - .pdf-text-layer 元素
-     */
-    const RenderTextLayer = async (textContent, viewport, textLayer) => {
-        if (!textLayer) return;
-
-        // 清空之前的文本层内容
-        textLayer.innerHTML = '';
-        
-        try {
-            // 动态导入 TextLayer（避免构建时的模块解析问题）
-            const pdfModule = await import('pdfjs-dist/build/pdf.mjs');
-            const TextLayer = pdfModule.TextLayer;
-            
-            // 使用 PDF.js 内置的 TextLayer 进行渲染
-            const textLayerInstance = new TextLayer({
-                textContentSource: textContent,
-                container: textLayer,
-                viewport: viewport,
-            });
-            
-            await textLayerInstance.render();
-            console.log('TextLayer 渲染成功');
-        } catch (error) {
-            console.error('TextLayer 渲染失败:', error);
+            if (renderJobs.get(pageNum) === job) {
+                renderJobs.delete(pageNum);
+                renderingPages.value.delete(pageNum);
+                renderTasks.delete(pageNum);
+            }
         }
     };
 
@@ -279,35 +260,13 @@ export function usePdfPages(
     renderTimeout = setTimeout(() => {
         console.log('重新渲染可见页面:', Array.from(currentPages.value));
         currentPages.value.forEach(pageNum => {
-            // ⚠️ 关键修复：先取消正在进行的渲染任务，再标记为未渲染
-            if (renderTasks.has(pageNum)) {
-                const task = renderTasks.get(pageNum);
-                if (task && typeof task.cancel === 'function') {
-                    console.log(`取消第 ${pageNum} 页的渲染任务以进行重新渲染`);
-                    task.cancel();
-                }
-                renderTasks.delete(pageNum);
-            }
-            
-            renderingPages.value.delete(pageNum);
+            cancelPageRender(pageNum);
             RenderPage(pageNum);
         });
     }, RENDER_THROTTLE);
     };
 
-    onBeforeUnmount(() => {
-        if (pageObserver) pageObserver.disconnect();
-        if (renderTimeout) clearTimeout(renderTimeout);
-        
-        // ⚠️ 清理所有正在进行的渲染任务
-        renderTasks.forEach((task, pageNum) => {
-            if (task && typeof task.cancel === 'function') {
-                console.log(`清理第 ${pageNum} 页的渲染任务`);
-                task.cancel();
-            }
-        });
-        renderTasks.clear();
-    });
+    onBeforeUnmount(ClearPages);
 
     return {
         RegisterPageRefs,

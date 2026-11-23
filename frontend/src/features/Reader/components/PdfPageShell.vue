@@ -101,7 +101,7 @@ const handlePinRemove = (annotationId) => {
 <template>
   <div ref="container" class="pdf-page-container" :data-page-num="pageNum">
     <canvas ref="canvas" class="pdf-page-canvas"></canvas>
-    <div ref="textLayer" class="textLayer"></div>
+    <div ref="textLayer" class="pdf-text-layer-host"></div>
     
     <!-- 渲染当前页的大头针 -->
     <AnnotationPin
@@ -137,7 +137,13 @@ const handlePinRemove = (annotationId) => {
   z-index: 1;
 }
 
-.textLayer {
+.pdf-text-layer-host {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.pdf-text-layer-host :deep(.textLayer) {
   position: absolute;
   left: 0;
   top: 0;
@@ -146,7 +152,6 @@ const handlePinRemove = (annotationId) => {
   pointer-events: auto;
   user-select: text;
   -webkit-user-select: text;
-  z-index: 2;
   color: transparent;
   /* PDF.js TextLayer 必需样式 */
   --csstools-color-scheme--light: initial;
@@ -163,12 +168,14 @@ const handlePinRemove = (annotationId) => {
   transform-origin: 0 0;
   caret-color: CanvasText;
   /* PDF.js TextLayer 字体缩放变量 */
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
   --min-font-size: 1;
   --text-scale-factor: calc(var(--total-scale-factor, 1) * var(--min-font-size));
   --min-font-size-inv: calc(1 / var(--min-font-size));
 }
 
-.textLayer :is(span, br) {
+.pdf-text-layer-host :deep(.textLayer :is(span, br)) {
   color: transparent;
   position: absolute;
   white-space: pre;
@@ -176,7 +183,10 @@ const handlePinRemove = (annotationId) => {
   transform-origin: 0% 0%;
   user-select: text;
   -webkit-user-select: text;
-  /* PDF.js TextLayer 字体大小控制 */
+}
+
+.pdf-text-layer-host :deep(.textLayer > :not(.markedContent, .endOfContent)),
+.pdf-text-layer-host :deep(.textLayer .markedContent span:not(.markedContent)) {
   z-index: 1;
   --font-height: 0;
   font-size: calc(var(--text-scale-factor) * var(--font-height));
@@ -185,4 +195,39 @@ const handlePinRemove = (annotationId) => {
   transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
 }
 
+.pdf-text-layer-host :deep(.markedContent) {
+  display: contents;
+}
+
+.pdf-text-layer-host :deep(.textLayer ::selection) {
+  background: rgba(54, 122, 255, 0.32);
+}
+
+.pdf-text-layer-host :deep(.textLayer br::selection) {
+  background: transparent;
+}
+
+.pdf-text-layer-host :deep(.endOfContent) {
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.pdf-text-layer-host :deep(.textLayer.selecting .endOfContent) {
+  top: 0;
+}
+
+.pdf-text-layer-host :deep([data-main-rotation="90"]) {
+  transform: rotate(90deg) translateY(-100%);
+}
+
+.pdf-text-layer-host :deep([data-main-rotation="180"]) {
+  transform: rotate(180deg) translate(-100%, -100%);
+}
+
+.pdf-text-layer-host :deep([data-main-rotation="270"]) {
+  transform: rotate(270deg) translateX(-100%);
+}
 </style>
