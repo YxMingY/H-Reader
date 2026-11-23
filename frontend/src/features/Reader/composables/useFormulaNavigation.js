@@ -1,10 +1,10 @@
-import { ref, markRaw } from 'vue';
+import { ref } from 'vue';
 
 /**
  * useFormulaNavigation - 公式导航 Composable
  * 
  * 功能：
- * - PDF 加载后使用 page.getTextContent() 提取全部页面文本
+ * - PDF 加载后读取 PDF.js 文本流
  * - 扫描公式编号（括号包裹的数字），记录首次出现的位置
  * - 监听用户文本选择，检测是否选中了公式编号
  * - 显示悬浮窗，支持跳转到公式位置和返回原位置
@@ -15,7 +15,6 @@ import { ref, markRaw } from 'vue';
  * @param {Ref} options.readerContainer - 阅读器容器 ref
  * @param {Object} options.pageContainerRefs - 页面容器引用
  * @param {Object} options.pageCanvasRefs - 页面 Canvas 引用
- * @param {Function} options.GoToPage - 跳转页面方法
  */
 export function useFormulaNavigation({
   pdfDoc,
@@ -23,12 +22,13 @@ export function useFormulaNavigation({
   readerContainer,
   pageContainerRefs,
   pageCanvasRefs,
-  GoToPage,
 }) {
   // 公式编号 → 首次出现位置 { pageNum, x, y (PDF 坐标) }
   const formulaMap = ref(new Map());
   // 当前选中的公式信息
   const selectedFormula = ref(null);
+  const selectedText = ref('');
+  const selectionActionPending = ref(false);
   // 悬浮窗显示状态
   const showFormulaPopup = ref(false);
   // 悬浮窗位置（视口坐标）
@@ -39,8 +39,7 @@ export function useFormulaNavigation({
   const hasJumped = ref(false);
 
   // 内部状态
-  let selectionListener = null;
-  let outsideClickHandler = null;
+  let selectionEvents;
   let isJumping = false; // 跳转进行中的标志，防止 selectionchange 干扰
 
   // 匹配公式编号的正则：只匹配英文括号包裹的数字
@@ -49,7 +48,7 @@ export function useFormulaNavigation({
 
   /**
    * 从 PDF 全部页面提取公式编号及其首次出现位置
-   * 使用 page.getTextContent() API，不依赖 DOM 渲染
+   * 直接读取 PDF.js 文本流，不依赖 DOM 渲染
    */
   async function extractFormulas() {
     if (!pdfDoc.value) return;
@@ -62,17 +61,27 @@ export function useFormulaNavigation({
     for (let pageNum = 1; pageNum <= numPages; pageNum++) {
       try {
         const page = await pdfDoc.value.getPage(pageNum);
-        const textContent = await page.getTextContent();
         const pageHeight = page.view[3] - page.view[1];
 
         // 拼接本页全部文本，并记录每个 text item 的字符偏移
         let pageText = '';
         const items = [];
 
-        for (const item of textContent.items) {
-          if (!item.str) continue;
-          items.push({ str: item.str, offset: pageText.length, transform: item.transform });
-          pageText += item.str;
+        // 通过 reader 读取，兼容尚未实现 ReadableStream 异步迭代的 WebKit。
+        const reader = page.streamTextContent().getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            for (const item of value.items) {
+              if (!item.str) continue;
+              items.push({ offset: pageText.length, transform: item.transform });
+              pageText += item.str;
+            }
+          }
+        } finally {
+          reader.releaseLock();
         }
 
         // 扫描公式编号
@@ -128,100 +137,65 @@ export function useFormulaNavigation({
    * 设置文本选择监听（在 PDF 加载完成后调用）
    */
   function setupSelectionListener() {
-    // 清除旧监听
     cleanupSelectionListener();
+    selectionEvents = new AbortController();
+    const options = { signal: selectionEvents.signal };
+    let pointerDown = false;
 
-    selectionListener = () => {
-      // 跳转进行中不处理选择变化
-      if (isJumping) return;
+    function updateSelection() {
+      if (isJumping || hasJumped.value || pointerDown || selectionActionPending.value) return;
 
       const selection = window.getSelection();
-      if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+      const text = selection?.toString().trim();
+      if (!text || selection.isCollapsed || !selection.rangeCount) {
+        showFormulaPopup.value = false;
         return;
       }
 
-      const selectedText = selection.toString().trim();
-      // 去掉多余空白，便于匹配
-      const normalized = selectedText.replace(/\s+/g, '');
-
-      // 用户选择检测宽松模式：英文括号、中文括号、裸数字均可
-      const enParenMatch = normalized.match(/^\((\d+(?:\.\d+)*)\)$/);       // (1)
-      const zhParenMatch = !enParenMatch ? normalized.match(/^\uff08(\d+(?:\.\d+)*)\uff09$/) : null; // （1）
-      const bareMatch = (!enParenMatch && !zhParenMatch) ? normalized.match(/^(\d+(?:\.\d+)*)$/) : null; // 1
-      const theMatch = enParenMatch || zhParenMatch || bareMatch;
-
-      if (!theMatch) {
-        return;
-      }
-
-      const formulaNumber = theMatch[1];
-
-      const formulaInfo = formulaMap.value.get(formulaNumber);
-      if (!formulaInfo) return;
-
-      // 获取选区位置，用于定位悬浮窗
       const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-
-      popupPosition.value = {
-        x: Math.min(rect.left + rect.width / 2, window.innerWidth - 160),
-        y: rect.bottom + 10,
-      };
-
-      selectedFormula.value = {
-        number: formulaNumber,
-        pageNum: formulaInfo.pageNum,
-        x: formulaInfo.x,
-        y: formulaInfo.y,
-        pageHeight: formulaInfo.pageHeight,
-      };
-
-      showFormulaPopup.value = true;
-      hasJumped.value = false;
-      previousScrollPosition.value = null;
-
-      // 添加外部点击关闭
-      addOutsideClickListener();
-    };
-
-    document.addEventListener('selectionchange', selectionListener);
-  }
-
-  /**
-   * 清除选择监听
-   */
-  function cleanupSelectionListener() {
-    if (selectionListener) {
-      document.removeEventListener('selectionchange', selectionListener);
-      selectionListener = null;
-    }
-    removeOutsideClickListener();
-  }
-
-  /**
-   * 添加外部点击关闭处理器
-   */
-  function addOutsideClickListener() {
-    removeOutsideClickListener();
-    outsideClickHandler = (e) => {
-      if (e.target.closest('.formula-preview-popup')) return;
-      // 跳转后仅允许通过"返回"按钮关闭，外部点击不关闭
-      if (hasJumped.value) return;
-      showFormulaPopup.value = false;
-    };
-    // 用 setTimeout 避免当前 selection 事件触发关闭
-    setTimeout(() => {
-      if (outsideClickHandler) {
-        document.addEventListener('mousedown', outsideClickHandler);
+      const reader = readerContainer.value;
+      // WebKit can anchor a whole text item at its enclosing page element.
+      if (!reader?.contains(range.commonAncestorContainer) ||
+          !Array.from(reader.querySelectorAll('.textLayer')).some(layer => range.intersectsNode(layer))) {
+        showFormulaPopup.value = false;
+        return;
       }
-    }, 50);
+
+      const normalized = text.replace(/\s+/g, '');
+      const formulaNumber = normalized.match(/^\((\d+(?:\.\d+)*)\)$/)?.[1]
+        ?? normalized.match(/^（(\d+(?:\.\d+)*)）$/)?.[1]
+        ?? normalized.match(/^(\d+(?:\.\d+)*)$/)?.[1];
+      const formula = formulaMap.value.get(formulaNumber);
+      if (formulaNumber && !formula) {
+        showFormulaPopup.value = false;
+        return;
+      }
+
+      const rect = range.getBoundingClientRect();
+      popupPosition.value = { x: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom };
+      selectedText.value = text;
+      selectedFormula.value = formula ? { number: formulaNumber, ...formula } : null;
+      showFormulaPopup.value = true;
+    }
+
+    document.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('.selection-action-menu') || selectionActionPending.value) return;
+      pointerDown = true;
+      if (!hasJumped.value) showFormulaPopup.value = false;
+    }, options);
+    document.addEventListener('pointerup', (event) => {
+      pointerDown = false;
+      if (readerContainer.value?.contains(event.target)) updateSelection();
+    }, options);
+    document.addEventListener('pointercancel', () => { pointerDown = false; }, options);
+    document.addEventListener('selectionchange', updateSelection, options);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !hasJumped.value && !selectionActionPending.value) showFormulaPopup.value = false;
+    }, options);
   }
 
-  function removeOutsideClickListener() {
-    if (outsideClickHandler) {
-      document.removeEventListener('mousedown', outsideClickHandler);
-      outsideClickHandler = null;
-    }
+  function cleanupSelectionListener() {
+    selectionEvents?.abort();
   }
 
   /**
@@ -304,6 +278,12 @@ export function useFormulaNavigation({
     showFormulaPopup.value = false; // 返回后关闭悬浮窗
   }
 
+  function dismissSelectionMenu() {
+    showFormulaPopup.value = false;
+    hasJumped.value = false;
+    previousScrollPosition.value = null;
+  }
+
   /**
    * 清理所有资源
    */
@@ -311,6 +291,7 @@ export function useFormulaNavigation({
     cleanupSelectionListener();
     formulaMap.value = new Map();
     selectedFormula.value = null;
+    selectedText.value = '';
     showFormulaPopup.value = false;
     hasJumped.value = false;
     previousScrollPosition.value = null;
@@ -319,6 +300,8 @@ export function useFormulaNavigation({
   return {
     formulaMap,
     selectedFormula,
+    selectedText,
+    selectionActionPending,
     showFormulaPopup,
     popupPosition,
     hasJumped,
@@ -326,6 +309,7 @@ export function useFormulaNavigation({
     setupSelectionListener,
     jumpToFormula,
     returnToPreviousPosition,
+    dismissSelectionMenu,
     cleanup,
   };
 }

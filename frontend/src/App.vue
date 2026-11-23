@@ -125,6 +125,7 @@
           v-if="view === 'reader'"
           ref="readerRef"
           :pdf-source="pdfSource"
+          :insert-selection-into-chat="insertSelectionIntoChat"
           :book-path="currentBookPath"
           @loaded="onPDFLoaded"
           @pagechange="currentPage = $event"
@@ -265,6 +266,13 @@ const {
   view,
   readerRef,
 });
+
+const insertSelectionIntoChat = async (content) => {
+  if (!chatOpen.value) toggleChatPanel();
+  await nextTick();
+  if (!chatPanelRef.value) throw new Error('聊天面板尚未就绪，请重试。');
+  await chatPanelRef.value.appendSelectionToDraft(content);
+};
 
 /**
  * 截图功能

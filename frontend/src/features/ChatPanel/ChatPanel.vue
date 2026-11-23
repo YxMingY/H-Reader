@@ -373,6 +373,14 @@ watch(
 // 公开 API
 // ========================================
 
+const appendSelectionToDraft = async (content) => {
+  if (!activeSessionId.value) {
+    await createSessionAndEnter();
+    if (!activeSessionId.value) throw new Error(errorMessage.value || '创建会话失败，请重试。');
+  }
+  draft.value = draft.value ? `${draft.value}\n\n${content}` : content;
+};
+
 /**
  * 暴露给父组件的方法
  * 
@@ -381,6 +389,7 @@ watch(
  * chatPanelRef.value?.addAttachmentFromDataUrl(dataUrl, fileName);
  */
 defineExpose({
+  appendSelectionToDraft,
   /** 从 Data URL 添加附件（用于截图等功能） */
   addAttachmentFromDataUrl,
   /** 切换到指定会话（不自动滚动） */

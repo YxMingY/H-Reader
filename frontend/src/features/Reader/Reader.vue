@@ -9,7 +9,7 @@
  * - 滚动和页面导航
  * - 截图功能
  */
-import { ref, nextTick, onMounted, onBeforeUnmount, watch, markRaw } from 'vue';
+import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch, markRaw } from 'vue';
 
 // 导入各个功能模块的 composables
 import { 
@@ -27,10 +27,11 @@ import {
 // 导入页面渲染组件
 import PdfPageShell from './components/PdfPageShell.vue';
 import AnnotationPin from './components/AnnotationPin.vue';
-import FormulaPreview from './components/FormulaPreview.vue';
+import SelectionActionMenu from './components/SelectionActionMenu.vue';
 
 // 定义组件属性
 const props = defineProps({
+  insertSelectionIntoChat: { type: Function, required: true },
   pdfSource: String,   // PDF 文件路径或 URL
   bookPath: String,    // 书籍文件路径（用于保存阅读进度）
 });
@@ -104,6 +105,8 @@ const bookPathRef = ref(props.bookPath || '');
 
 const {
   selectedFormula,
+  selectedText,
+  selectionActionPending,
   showFormulaPopup,
   popupPosition,
   hasJumped,
@@ -111,6 +114,7 @@ const {
   setupSelectionListener,
   jumpToFormula,
   returnToPreviousPosition,
+  dismissSelectionMenu,
   cleanup: cleanupFormulaNav,
 } = useFormulaNavigation({
   pdfDoc,
@@ -118,7 +122,29 @@ const {
   readerContainer,
   pageContainerRefs,
   pageCanvasRefs,
-  GoToPage,
+});
+const selectionActions = computed(() => {
+  if (hasJumped.value) {
+    return [{ id: 'return', label: '返回原位', run: returnToPreviousPosition }];
+  }
+  if (selectedFormula.value) {
+    return [{ id: 'jump', label: '跳转公式', run: jumpToFormula }];
+  }
+
+  const text = selectedText.value;
+  const insertDraft = async (content) => {
+    selectionActionPending.value = true;
+    try {
+      await props.insertSelectionIntoChat(content);
+      showFormulaPopup.value = false;
+    } finally {
+      selectionActionPending.value = false;
+    }
+  };
+  return [
+    { id: 'chat', label: '插入聊天', run: () => insertDraft(text) },
+    { id: 'explain', label: '解释这段内容', run: () => insertDraft(`请解释下面这段内容：\n\n${text}`) },
+  ];
 });
 
 // ========================================
@@ -457,15 +483,13 @@ defineExpose({
       />
     </div>
     
-    <!-- 公式预览悬浮窗 -->
-    <FormulaPreview
-      v-if="showFormulaPopup && selectedFormula"
-      :formula="selectedFormula"
+    <SelectionActionMenu
+      v-if="showFormulaPopup"
+      :heading="selectedFormula ? `公式 (${selectedFormula.number}) · 第 ${selectedFormula.pageNum} 页` : ''"
+      :actions="selectionActions"
       :position="popupPosition"
-      :has-jumped="hasJumped"
-      @jump="jumpToFormula"
-      @return="returnToPreviousPosition"
-      @close="showFormulaPopup = false"
+      :docked="hasJumped"
+      @close="dismissSelectionMenu"
     />
   </div>
 </template>
