@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"hreader/services/book"
 	"hreader/services/chat"
+	"hreader/services/dictionary"
 	"log"
 	"time"
 
@@ -33,6 +34,7 @@ func main() {
 			application.NewService(&book.BookService{}),
 			application.NewService(&book.AnnotationService{}),
 			application.NewService(chat.NewChatService()),
+			application.NewService(&dictionary.DictionaryService{}),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

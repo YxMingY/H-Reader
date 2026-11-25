@@ -10,6 +10,7 @@
  * - 截图功能
  */
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch, markRaw } from 'vue';
+import { DictionaryService } from '../../../bindings/hreader/services/dictionary';
 
 // 导入各个功能模块的 composables
 import { 
@@ -124,6 +125,21 @@ const {
   pageContainerRefs,
   pageCanvasRefs,
 });
+const dictionaryEntry = ref(null);
+watch([selectedText, showFormulaPopup, selectedFormula], async ([text, open, formula], _, onCleanup) => {
+  dictionaryEntry.value = null;
+  if (!open || formula || !text) return;
+
+  let stale = false;
+  onCleanup(() => { stale = true; });
+  try {
+    const entry = await DictionaryService.Lookup(text);
+    if (!stale) dictionaryEntry.value = entry;
+  } catch (error) {
+    if (!stale) console.warn('离线查词失败', error);
+  }
+});
+
 const selectionActions = computed(() => {
   if (hasJumped.value) {
     return [{ id: 'return', label: '返回原位', run: returnToPreviousPosition }];
@@ -310,6 +326,7 @@ watch(() => props.bookPath, (newBookPath) => {
 // 组件挂载时加载 PDF
 onMounted(() => {
   if (props.pdfSource) {
+    void DictionaryService.Prepare().catch(error => console.warn('离线词库加载失败', error));
     loadPdf(props.pdfSource);
   }
 });
@@ -494,6 +511,7 @@ defineExpose({
       v-if="showFormulaPopup"
       :heading="selectedFormula ? `公式 (${selectedFormula.number}) · 第 ${selectedFormula.pageNum} 页` : ''"
       :actions="selectionActions"
+      :dictionary-entry="dictionaryEntry"
       :position="popupPosition"
       :docked="hasJumped"
       @close="dismissSelectionMenu"

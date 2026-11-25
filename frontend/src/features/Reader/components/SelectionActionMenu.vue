@@ -6,6 +6,7 @@ const props = defineProps({
   position: { type: Object, required: true },
   actions: { type: Array, required: true },
   docked: Boolean,
+  dictionaryEntry: { type: Object, default: null },
 });
 
 const emit = defineEmits(['close', 'editing-change']);
@@ -83,7 +84,7 @@ watch(() => props.position, () => {
   error.value = '';
   nextTick(placeMenu);
 });
-watch(error, placeMenu, { flush: 'post' });
+watch([error, () => props.dictionaryEntry], placeMenu, { flush: 'post' });
 onMounted(() => {
   placeMenu();
   window.addEventListener('resize', placeMenu);
@@ -106,6 +107,11 @@ onBeforeUnmount(() => {
       :aria-busy="pending"
     >
       <div v-if="heading" class="selection-heading">{{ heading }}</div>
+      <div v-if="dictionaryEntry && !inputAction" class="dictionary-entry">
+        <strong lang="en">{{ dictionaryEntry.word }}</strong>
+        <span v-if="dictionaryEntry.phonetic" class="dictionary-phonetic">{{ dictionaryEntry.phonetic }}</span>
+        <div class="dictionary-translation" lang="zh">{{ dictionaryEntry.translation }}</div>
+      </div>
       <form v-if="inputAction" class="selection-input-form" @submit.prevent="submitInput" @keydown.esc="handleInputEscape">
         <input
           ref="actionInput"
@@ -158,6 +164,23 @@ onBeforeUnmount(() => {
 .selection-heading,
 .selection-error {
   margin: 4px;
+}
+
+.dictionary-entry {
+  padding: 2px 4px 8px;
+}
+
+.dictionary-phonetic {
+  margin-left: 8px;
+  color: #586574;
+}
+
+.dictionary-translation {
+  margin-top: 4px;
+  max-height: min(160px, 35vh);
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .selection-input-form {
