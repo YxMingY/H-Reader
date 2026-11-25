@@ -90,4 +90,45 @@ func TestBudgetCompactionAndRollback(t *testing.T) {
 	if restored.RollbackMessages(6) != 6 || restored.covered != 0 || restored.GetTrace() != EmptyTraceState {
 		t.Fatal("rollback did not invalidate the summary")
 	}
+	changed, err := conv.CompactHistory(context.Background())
+	if err != nil || !changed || conv.covered != 4 || len(conv.History) != 12 {
+		t.Fatalf("manual compaction: changed=%v covered=%d history=%d err=%v", changed, conv.covered, len(conv.History), err)
+	}
+	if changed, err := conv.CompactHistory(context.Background()); changed || err != nil {
+		t.Fatalf("compaction with only four eligible recent turns: %v %v", changed, err)
+	}
+	summaryCalls := summaries
+	window := client.NewWindowConversation()
+	window.AddText("first window turn")
+	if _, err := window.Chat(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	window.SetWindowSize(0)
+	window.AddText("question with no history")
+	if _, err := window.Chat(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(last) != 2 || strings.Contains(last[0].Content, "TRACE_STATE") || summaries != summaryCalls {
+		t.Fatalf("zero window sent unexpected context: %d messages, %d summaries", len(last), summaries)
+	}
+	saved, err = window.ExportJSON()
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoredWindow := client.NewWindowConversation()
+	legacyWindow := strings.Replace(saved, "{", `{"trace":"legacy empty trace",`, 1)
+	if err := restoredWindow.ImportJSON(legacyWindow); err != nil {
+		t.Fatal(err)
+	}
+	if restoredWindow.windowSize != 0 {
+		t.Fatal("zero window did not survive reload")
+	}
+	restoredWindow.SetWindowSize(2)
+	restoredWindow.AddText("question with two rounds")
+	if _, err := restoredWindow.Chat(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(last) != 6 || last[3].Content != "question with no history" || summaries != summaryCalls {
+		t.Fatalf("resized window did not recover recent history: %d messages, %d summaries", len(last), summaries)
+	}
 }

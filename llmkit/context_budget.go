@@ -2,6 +2,7 @@ package llmkit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -54,7 +55,6 @@ func (t *TracedConversation) sendBudgeted(ctx context.Context, send func(*Conver
 		return fmt.Errorf("current message is empty")
 	}
 	conv := *t.Conversation
-	conv.MaxHistory = 0
 	trace, end := t.trace, t.covered
 	inputLimit := t.budget - conv.currentRequestOptions().MaxTokens
 	fixed := estimateMessage(t.CurrentMsg.Build()) + 8
@@ -98,20 +98,11 @@ func (t *TracedConversation) sendBudgeted(ctx context.Context, send func(*Conver
 		}
 	}
 
-	conv.History = append([]openai.ChatCompletionMessage(nil), t.History[end:]...)
 	conv.SetSystemPrompt(RenderSystemPrompt(trace))
-	if err := send(&conv); err != nil {
+	if err := t.Conversation.sendWithHistory(conv, end, send); err != nil {
 		return err
 	}
-
-	// Keep original turns for exact rollback. Only the outgoing request omits
-	// the summarized range. Its exclusive end is stable as history grows.
-	conv.History = append(t.History, conv.History[len(conv.History)-2:]...)
-	*t.Conversation = conv
-	if end != t.covered {
-		t.covered, t.trace = end, trace
-		t.addTraceSnapshot(end, trace)
-	}
+	t.saveCompaction(end, trace)
 	return nil
 }
 
@@ -132,4 +123,37 @@ func (t *TracedConversation) summarizeHistory(ctx context.Context, old string, m
 		return "", fmt.Errorf("compact conversation: empty summary")
 	}
 	return strings.TrimSpace(response.Choices[0].Message.Content), nil
+}
+
+// CompactHistory summarizes eligible older turns without sending a user
+// message. It reports whether the saved summary changed.
+func (t *TracedConversation) CompactHistory(ctx context.Context) (bool, error) {
+	if t.budget <= 0 {
+		return false, errors.New("manual compaction requires budget-based compaction mode")
+	}
+	end := t.covered
+	for remaining := (len(t.History) - end) / 2; remaining > t.protected; remaining-- {
+		if t.History[end].Role != openai.ChatMessageRoleUser ||
+			t.History[end+1].Role != openai.ChatMessageRoleAssistant {
+			break
+		}
+		end += 2
+	}
+	if end == t.covered {
+		return false, nil
+	}
+	trace, err := t.summarizeHistory(ctx, t.trace, t.History[t.covered:end])
+	if err != nil {
+		return false, err
+	}
+	t.saveCompaction(end, trace)
+	return true, nil
+}
+
+func (t *TracedConversation) saveCompaction(end int, trace string) {
+	if end != t.covered {
+		t.covered, t.trace = end, trace
+		t.SetSystemPrompt(RenderSystemPrompt(trace))
+		t.addTraceSnapshot(end, trace)
+	}
 }

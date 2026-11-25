@@ -82,3 +82,10 @@ func (c *Client) NewConversation() *Conversation {
 func (c *Client) NewTracedConversation(policy TraceUpdatePolicy) *TracedConversation {
 	return NewTracedConversation(c.NewConversation(), policy)
 }
+
+// NewWindowConversation creates a window conversation with no history sent by default.
+func (c *Client) NewWindowConversation() *WindowConversation {
+	base := c.NewConversation()
+	base.SetSystemPrompt(windowSystemPrompt)
+	return &WindowConversation{Conversation: base}
+}

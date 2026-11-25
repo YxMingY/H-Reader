@@ -396,3 +396,16 @@ func (conv *Conversation) RollbackMessages(n int) int {
 
 	return messagesToRemove / 2 // 返回删除的消息对数量
 }
+
+// sendWithHistory uses a suffix for the request and commits the new turn only
+// after the request succeeds, keeping the full history available for rollback.
+func (conv *Conversation) sendWithHistory(request Conversation, start int, send func(*Conversation) error) error {
+	request.MaxHistory = 0
+	request.History = append([]openai.ChatCompletionMessage(nil), conv.History[start:]...)
+	if err := send(&request); err != nil {
+		return err
+	}
+	request.History = append(conv.History, request.History[len(request.History)-2:]...)
+	*conv = request
+	return nil
+}
