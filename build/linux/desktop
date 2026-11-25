@@ -1,13 +1,13 @@
 [Desktop Entry]
 Version=1.0
-Name=My Product
-Comment=A hreader application
+Name=HReader
+Comment=A modern e-reader application
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/hreader.exe %u
+Exec=/usr/local/bin/hreader %u
 Terminal=false
 Type=Application
-Icon=hreader.exe
+Icon=hreader
 Categories=Utility;
-StartupWMClass=hreader.exe
+StartupWMClass=hreader
 
  

@@ -1,13 +1,13 @@
 {
 	"fixed": {
-		"file_version": "1.0.0-alpha.6"
+		"file_version": "1.0.0-alpha.5"
 	},
 	"info": {
-		"0000": {
-			"ProductVersion": "1.0.0-alpha.6",
+		"0409": {
+			"ProductVersion": "1.0.0-alpha.5",
 			"CompanyName": "xMing Kaede",
 			"FileDescription": "A modern e-reader application",
-			"LegalCopyright": "© 2026, xMing Kaede",
+			"LegalCopyright": "(c) 2025, xMing Kaede",
 			"ProductName": "HReader",
 			"Comments": "Built with Wails3 and Go"
 		}
