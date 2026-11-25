@@ -91,7 +91,7 @@ const resetStreamingState = () => {
  * 2. 会话检查：如果没有活跃会话，自动创建新会话
  * 3. 乐观更新：在本地创建 user 和 assistant 占位消息，提供即时反馈
  * 4. 流式追踪：设置 streamSessionId 和 streamAssistantIndex
- * 5. 清理输入：清空草稿和附件列表
+ * 5. 清理输入：清空草稿及本次发送的附件
  * 6. 滚动定位：滚动到消息底部
  * 7. API 调用：调用后端流式接口 SendMessageStreamInSession
  * 8. 错误处理：失败时回滚占位消息，显示错误提示
@@ -105,16 +105,19 @@ const resetStreamingState = () => {
  * - API 调用可能立即失败（如 API key 未配置）
  * - 也可能在后台异步失败（通过网络事件监听器捕获）
  */
-const sendMessage = async () => {
+const sendMessage = async ({ includeAttachments = true } = {}) => {
+  if (sending.value) return;
+
   // 步骤 1: 验证输入
   let text = draft.value.trim();
+  const outgoingAttachments = includeAttachments ? attachments.value : [];
   
   // 如果只有图片没有文字，自动添加默认提示
-  if (!text && attachments.value.length > 0) {
+  if (!text && outgoingAttachments.length > 0) {
     text = '请解释图片';
   }
   
-  if (!text && attachments.value.length === 0) return;
+  if (!text && outgoingAttachments.length === 0) return;
 
   // 步骤 2: 初始化状态
   errorMessage.value = '';
@@ -136,7 +139,7 @@ const sendMessage = async () => {
     const localNow = new Date().toISOString();
     
     // 准备附件数据（用于立即显示）- 使用压缩后的图片
-    const pendingImages = attachments.value.map((item) => item.compressedDataUrl);
+    const pendingImages = outgoingAttachments.map((item) => item.compressedDataUrl);
     
     // 创建用户消息（包含附件）
     messages.value.push({ 
@@ -155,12 +158,13 @@ const sendMessage = async () => {
 
     // 步骤 6: 清理输入
     draft.value = '';
-    attachments.value = [];
+    if (includeAttachments) attachments.value = [];
     
     // 步骤 7: 滚动到底部
     await scrollToBottom(true);
 
     // 步骤 8: 调用后端流式 API - 发送压缩后的图片
+    // 接口仅启动后台任务，发送状态由流式完成或错误事件清除。
     await ChatService.SendMessageStreamInSession(
       props.scopeType,
       props.scopeType === 'book' ? props.bookPath : '',
@@ -190,9 +194,6 @@ const sendMessage = async () => {
     const errorMsg = err?.message || String(err) || '发送失败';
     errorMessage.value = `发送失败：${errorMsg}`;
     console.error('sendMessage error:', err);
-  } finally {
-    // 无论成功与否，都重置发送状态
-    sending.value = false;
   }
 };
 

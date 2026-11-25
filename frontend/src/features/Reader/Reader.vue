@@ -107,6 +107,7 @@ const {
   selectedFormula,
   selectedText,
   selectionActionPending,
+  selectionInputActive,
   showFormulaPopup,
   popupPosition,
   hasJumped,
@@ -132,18 +133,24 @@ const selectionActions = computed(() => {
   }
 
   const text = selectedText.value;
-  const insertDraft = async (content) => {
+  const useSelection = async (content, options) => {
     selectionActionPending.value = true;
     try {
-      await props.insertSelectionIntoChat(content);
+      await props.insertSelectionIntoChat(content, options);
       showFormulaPopup.value = false;
     } finally {
       selectionActionPending.value = false;
     }
   };
   return [
-    { id: 'chat', label: '插入聊天', run: () => insertDraft(text) },
-    { id: 'explain', label: '解释这段内容', run: () => insertDraft(`请解释下面这段内容：\n\n${text}`) },
+    { id: 'chat', label: '插入聊天', run: () => useSelection(text) },
+    {
+      id: 'ask',
+      label: '提问',
+      inputPlaceholder: '输入你的问题',
+      run: (question) => useSelection(`${question}：\n${text}`),
+    },
+    { id: 'explain', label: '解释这段内容', run: () => useSelection(`请解释下面这段内容：\n${text}`, { sendImmediately: true }) },
   ];
 });
 
@@ -490,6 +497,7 @@ defineExpose({
       :position="popupPosition"
       :docked="hasJumped"
       @close="dismissSelectionMenu"
+      @editing-change="selectionInputActive = $event"
     />
   </div>
 </template>

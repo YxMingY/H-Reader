@@ -29,6 +29,7 @@
 
     <!-- 文本输入框：支持多行输入、快捷键发送和粘贴图片 -->
     <textarea
+      ref="textareaRef"
       :value="draft"
       class="chat-input"
       rows="3"
@@ -215,6 +216,20 @@ const handleQualityChange = (id, value) => {
 const sendMessage = () => {
   emit('send-message');
 };
+
+const textareaRef = ref(null);
+
+function focusAtEnd() {
+  const textarea = textareaRef.value;
+  if (!textarea) return;
+
+  const end = textarea.value.length;
+  textarea.focus();
+  textarea.setSelectionRange(end, end);
+  textarea.scrollTop = textarea.scrollHeight;
+}
+
+defineExpose({ focusAtEnd });
 </script>
 
 <style scoped>

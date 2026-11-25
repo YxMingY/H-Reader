@@ -76,6 +76,7 @@
     
       <!-- 消息输入区域：包含附件预览、输入框和操作按钮 -->
       <InputArea
+        ref="inputAreaRef"
         :draft="draft"
         @update:draft="draft = $event"
         :attachments="attachments"
@@ -108,7 +109,7 @@
  * - 使用 bookKey（文件哈希）而非 bookPath 标识书籍，避免路径变化导致会话丢失
  */
 
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { ChatService } from '../../../bindings/hreader/services/chat';
 import { useChatInput, useChatStream, useSession, useTools, useScrollBottom, useMessageActions } from './composables';
 import { SessionList, MessageDisplay, InputArea } from './components';
@@ -158,6 +159,7 @@ const sending = ref(false);
 const errorMessage = ref('');
 /** 消息显示组件引用（用于获取滚动容器） */
 const messageDisplayRef = ref(null);
+const inputAreaRef = ref(null);
 
 // ========================================
 // 计算属性 - 作用域相关
@@ -373,12 +375,22 @@ watch(
 // 公开 API
 // ========================================
 
-const appendSelectionToDraft = async (content) => {
+const applyPdfSelection = async (content, { sendImmediately = false } = {}) => {
+  if (sendImmediately) {
+    if (sending.value) throw new Error('正在生成回复，请稍后重试。');
+    draft.value = content;
+    await sendMessage({ includeAttachments: false });
+    return;
+  }
+
   if (!activeSessionId.value) {
     await createSessionAndEnter();
     if (!activeSessionId.value) throw new Error(errorMessage.value || '创建会话失败，请重试。');
   }
-  draft.value = draft.value ? `${draft.value}\n\n${content}` : content;
+  const separator = draft.value && !draft.value.endsWith('\n') ? '\n' : '';
+  draft.value += `${separator}${content}\n`;
+  await nextTick();
+  inputAreaRef.value?.focusAtEnd();
 };
 
 /**
@@ -389,7 +401,7 @@ const appendSelectionToDraft = async (content) => {
  * chatPanelRef.value?.addAttachmentFromDataUrl(dataUrl, fileName);
  */
 defineExpose({
-  appendSelectionToDraft,
+  applyPdfSelection,
   /** 从 Data URL 添加附件（用于截图等功能） */
   addAttachmentFromDataUrl,
   /** 切换到指定会话（不自动滚动） */

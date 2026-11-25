@@ -267,11 +267,11 @@ const {
   readerRef,
 });
 
-const insertSelectionIntoChat = async (content) => {
+const insertSelectionIntoChat = async (content, options) => {
   if (!chatOpen.value) toggleChatPanel();
   await nextTick();
   if (!chatPanelRef.value) throw new Error('聊天面板尚未就绪，请重试。');
-  await chatPanelRef.value.appendSelectionToDraft(content);
+  await chatPanelRef.value.applyPdfSelection(content, options);
 };
 
 /**

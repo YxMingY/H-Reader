@@ -29,6 +29,7 @@ export function useFormulaNavigation({
   const selectedFormula = ref(null);
   const selectedText = ref('');
   const selectionActionPending = ref(false);
+  const selectionInputActive = ref(false);
   // 悬浮窗显示状态
   const showFormulaPopup = ref(false);
   // 悬浮窗位置（视口坐标）
@@ -143,7 +144,7 @@ export function useFormulaNavigation({
     let pointerDown = false;
 
     function updateSelection() {
-      if (isJumping || hasJumped.value || pointerDown || selectionActionPending.value) return;
+      if (isJumping || hasJumped.value || pointerDown || selectionActionPending.value || selectionInputActive.value) return;
 
       const selection = window.getSelection();
       const text = selection?.toString().trim();
@@ -190,7 +191,9 @@ export function useFormulaNavigation({
     document.addEventListener('pointercancel', () => { pointerDown = false; }, options);
     document.addEventListener('selectionchange', updateSelection, options);
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && !hasJumped.value && !selectionActionPending.value) showFormulaPopup.value = false;
+      if (event.key === 'Escape' && !hasJumped.value && !selectionActionPending.value && !selectionInputActive.value) {
+        showFormulaPopup.value = false;
+      }
     }, options);
   }
 
@@ -302,6 +305,7 @@ export function useFormulaNavigation({
     selectedFormula,
     selectedText,
     selectionActionPending,
+    selectionInputActive,
     showFormulaPopup,
     popupPosition,
     hasJumped,

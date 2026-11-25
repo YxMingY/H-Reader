@@ -8,11 +8,14 @@ const props = defineProps({
   docked: Boolean,
 });
 
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'editing-change']);
 const menu = ref(null);
 const placement = ref({ left: '0px', top: '0px' });
 const pending = ref(false);
 const error = ref('');
+const inputAction = ref(null);
+const inputValue = ref('');
+const actionInput = ref(null);
 
 function placeMenu() {
   if (!menu.value || props.docked) return;
@@ -29,12 +32,46 @@ function placeMenu() {
   };
 }
 
-async function runAction(action) {
+async function chooseAction(action) {
+  if (action.inputPlaceholder) {
+    inputAction.value = action;
+    inputValue.value = '';
+    error.value = '';
+    emit('editing-change', true);
+    await nextTick();
+    placeMenu();
+    actionInput.value?.focus();
+    return;
+  }
+  await runAction(action);
+}
+
+function cancelInput() {
+  if (pending.value) return;
+  inputAction.value = null;
+  error.value = '';
+  emit('editing-change', false);
+  nextTick(placeMenu);
+}
+
+function handleInputEscape(event) {
+  if (event.isComposing) return;
+  event.stopPropagation();
+  cancelInput();
+}
+
+async function submitInput() {
+  const value = inputValue.value.trim();
+  if (!inputAction.value || !value) return;
+  await runAction(inputAction.value, value);
+}
+
+async function runAction(action, value) {
   if (pending.value) return;
   pending.value = true;
   error.value = '';
   try {
-    await action.run();
+    await action.run(value);
   } catch (err) {
     error.value = err?.message || '操作失败，请重试。';
   } finally {
@@ -51,7 +88,10 @@ onMounted(() => {
   placeMenu();
   window.addEventListener('resize', placeMenu);
 });
-onBeforeUnmount(() => window.removeEventListener('resize', placeMenu));
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', placeMenu);
+  if (inputAction.value) emit('editing-change', false);
+});
 </script>
 
 <template>
@@ -64,16 +104,29 @@ onBeforeUnmount(() => window.removeEventListener('resize', placeMenu));
       role="group"
       aria-label="PDF 选区操作"
       :aria-busy="pending"
-      @mousedown.prevent
     >
       <div v-if="heading" class="selection-heading">{{ heading }}</div>
-      <div class="selection-actions">
+      <form v-if="inputAction" class="selection-input-form" @submit.prevent="submitInput" @keydown.esc="handleInputEscape">
+        <input
+          ref="actionInput"
+          v-model="inputValue"
+          type="text"
+          :aria-label="inputAction.inputPlaceholder"
+          :placeholder="inputAction.inputPlaceholder"
+          :readonly="pending"
+        />
+        <div class="selection-actions">
+          <button type="submit" :disabled="pending || !inputValue.trim()">插入聊天</button>
+          <button type="button" :disabled="pending" @click="cancelInput">取消</button>
+        </div>
+      </form>
+      <div v-else class="selection-actions" @mousedown.prevent>
         <button
           v-for="action in actions"
           :key="action.id"
           type="button"
           :disabled="pending"
-          @click="runAction(action)"
+          @click="chooseAction(action)"
         >{{ action.label }}</button>
         <button type="button" aria-label="关闭选区菜单" :disabled="pending" @click="emit('close')">×</button>
       </div>
@@ -105,6 +158,21 @@ onBeforeUnmount(() => window.removeEventListener('resize', placeMenu));
 .selection-heading,
 .selection-error {
   margin: 4px;
+}
+
+.selection-input-form {
+  display: grid;
+  gap: 6px;
+}
+
+.selection-input-form input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 9px;
+  border: 1px solid #d4e0ea;
+  border-radius: 5px;
+  font: inherit;
 }
 
 .selection-actions {
