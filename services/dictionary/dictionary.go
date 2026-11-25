@@ -36,6 +36,7 @@ type dictionaryIndex struct {
 
 var (
 	englishWord = regexp.MustCompile(`^[a-z]+(?:['-][a-z]+)*$`)
+	lineBreak   = regexp.MustCompile(`[\t\p{Zs}]*(?:\r\n|[\r\n\x{2028}])[\t\p{Zs}]*`)
 	punctuation = strings.NewReplacer("’", "'", "‘", "'", "‑", "-", "‐", "-")
 	loadIndex   = sync.OnceValues(func() (*dictionaryIndex, error) { return buildIndex(ecdictCSV) })
 )
@@ -50,7 +51,7 @@ func (*DictionaryService) Prepare() error {
 
 // Lookup returns the exact entry or a matching base word from ECDICT.
 func (*DictionaryService) Lookup(selection string) (*Entry, error) {
-	word := normalizeWord(selection)
+	word, unhyphenated := lookupWords(selection)
 	if word == "" {
 		return nil, nil
 	}
@@ -58,18 +59,50 @@ func (*DictionaryService) Lookup(selection string) (*Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return index.lookup(word)
+	entry, err := index.lookup(word)
+	if err != nil || entry != nil || unhyphenated == "" {
+		return entry, err
+	}
+	return index.lookup(unhyphenated)
 }
 
-func normalizeWord(selection string) string {
+// lookupWords returns a preferred spelling and, for line-end hyphens, a fallback.
+func lookupWords(selection string) (string, string) {
 	word := strings.TrimFunc(selection, func(r rune) bool {
 		return unicode.IsSpace(r) || unicode.IsPunct(r)
 	})
 	word = strings.ToLower(punctuation.Replace(word))
-	if !englishWord.MatchString(word) {
-		return ""
+	if englishWord.MatchString(word) {
+		return word, ""
 	}
-	return word
+
+	parts := lineBreak.Split(word, -1)
+	if len(parts) < 2 {
+		return "", ""
+	}
+	for i := 0; i < len(parts)-1; i++ {
+		// A soft hyphen already marks a discretionary line break.
+		parts[i] = strings.TrimSuffix(parts[i], "\u00ad")
+		if parts[i] == "" {
+			return "", ""
+		}
+	}
+	if parts[len(parts)-1] == "" {
+		return "", ""
+	}
+	word = strings.Join(parts, "")
+	if !englishWord.MatchString(word) {
+		return "", ""
+	}
+
+	for i := 0; i < len(parts)-1; i++ {
+		parts[i] = strings.TrimSuffix(parts[i], "-")
+	}
+	alternative := strings.Join(parts, "")
+	if alternative == word || !englishWord.MatchString(alternative) {
+		return word, ""
+	}
+	return word, alternative
 }
 
 func buildIndex(data string) (*dictionaryIndex, error) {

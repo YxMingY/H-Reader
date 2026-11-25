@@ -24,7 +24,8 @@ func TestLookup(t *testing.T) {
 		{"unknown", "", ""},
 	} {
 		t.Run(test.input, func(t *testing.T) {
-			entry, err := index.lookup(normalizeWord(test.input))
+			word, _ := lookupWords(test.input)
+			entry, err := index.lookup(word)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -49,5 +50,39 @@ func TestEmbeddedECDICT(t *testing.T) {
 	}
 	if entry == nil || entry.Word != "study" || entry.Phonetic == "" || !strings.Contains(entry.Translation, "学习") {
 		t.Fatalf("unexpected ECDICT result: %+v", entry)
+	}
+}
+
+func TestLookupWrappedWords(t *testing.T) {
+	service := &DictionaryService{}
+	for _, test := range []struct {
+		selection, want string
+	}{
+		{"trans\nlation", "translation"},
+		{"TRANS-\nLATION", "translation"},
+		{"“trans- \r\n\tlation”", "translation"},
+		{"trans\u00ad\nlation", "translation"},
+		{"well-\nknown", "well-known"},
+		{"well\u2011\r\nknown", "well-known"},
+		{"well-known", "well-known"},
+		{"trans- lation", ""},
+		{"take into\naccount", ""},
+		{"trans-\n\nlation", ""},
+	} {
+		t.Run(test.selection, func(t *testing.T) {
+			entry, err := service.Lookup(test.selection)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if test.want == "" {
+				if entry != nil {
+					t.Fatalf("expected no match, got %+v", entry)
+				}
+				return
+			}
+			if entry == nil || entry.Word != test.want || entry.Translation == "" {
+				t.Fatalf("expected %q with translation, got %+v", test.want, entry)
+			}
+		})
 	}
 }
