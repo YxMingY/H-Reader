@@ -172,8 +172,7 @@ func (c *ChatService) ensureConversationLocked() error {
 
 	// 从 client 创建新的 conversation
 	conversation := c.client.NewTracedConversation(nil)
-	conversation.SetMaxHistory(8)
-	conversation.SetMaxTokens(4096) // 提高最大输出 token 限制
+	configureConversationBudget(conversation)
 	c.conversation = conversation
 
 	return nil

@@ -318,15 +318,13 @@ func (c *ChatService) RollbackSessionMessages(scopeType, bookPath, sessionID str
 //
 // 注意：
 //   - 每个会话都有独立的 conversation 对象，互不影响
-//   - maxHistory=8, maxTokens=4096（与全局会话相同配置）
+//   - 使用与全局会话相同的上下文预算。
 func (c *ChatService) newSessionConversation(llmStateJSON string) (*llmkit.TracedConversation, error) {
 	if c.client == nil {
 		return nil, fmt.Errorf("client not initialized; call SaveAPIKey first")
 	}
 
 	conv := c.client.NewTracedConversation(nil)
-	conv.SetMaxHistory(8)
-	conv.SetMaxTokens(4096) // 提高最大输出 token 限制
 
 	// 如果有保存的状态，恢复到 conversation 中
 	if strings.TrimSpace(llmStateJSON) != "" {
@@ -335,5 +333,13 @@ func (c *ChatService) newSessionConversation(llmStateJSON string) (*llmkit.Trace
 		}
 	}
 
+	configureConversationBudget(conv)
 	return conv, nil
+}
+
+// Use a conservative default for user-selected models whose context limits
+// are not available to the chat service.
+func configureConversationBudget(conv *llmkit.TracedConversation) {
+	conv.SetMaxTokens(4096)
+	conv.SetContextBudget(16_384, 4)
 }

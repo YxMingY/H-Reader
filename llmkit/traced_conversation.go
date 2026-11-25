@@ -60,6 +60,9 @@ type traceSnapshot struct {
 // 只对 Chat / Send / SendStream 这些真正需要插入 trace 逻辑的入口做覆盖。
 type TracedConversation struct {
 	*Conversation
+	budget       int
+	protected    int
+	covered      int
 	trace        string
 	policy       TraceUpdatePolicy
 	traceHistory []traceSnapshot // trace 历史快照，用于回溯
@@ -67,6 +70,7 @@ type TracedConversation struct {
 
 type tracedConversationJSONSnapshot struct {
 	conversationJSONSnapshot
+	Covered      int             `json:"summary_covered_messages,omitempty"`
 	Trace        string          `json:"trace,omitempty"`
 	TraceHistory []traceSnapshot `json:"trace_history,omitempty"` // trace 历史快照
 }
@@ -260,16 +264,27 @@ TRACE_STATE:
 // Chat 会在调用前根据策略决定是否静默更新思路摘要，随后调用底层 Conversation 的 Chat。
 func (t *TracedConversation) Chat(ctx context.Context) (string, error) {
 	// 尝试更新 trace；若失败，不阻塞主对话（返回值以主对话为准）
-	_ = t.maybeUpdateTrace(ctx)
-	return t.Conversation.Chat(ctx)
+	return t.Send(ctx)
 }
 
 func (t *TracedConversation) Send(ctx context.Context) (string, error) {
+	if t.budget > 0 {
+		var reply string
+		err := t.sendBudgeted(ctx, func(conv *Conversation) error {
+			var err error
+			reply, err = conv.Send(ctx)
+			return err
+		})
+		return reply, err
+	}
 	_ = t.maybeUpdateTrace(ctx)
 	return t.Conversation.Send(ctx)
 }
 
 func (t *TracedConversation) SendStream(ctx context.Context, callback StreamCallback) error {
+	if t.budget > 0 {
+		return t.sendBudgeted(ctx, func(conv *Conversation) error { return conv.SendStream(ctx, callback) })
+	}
 	_ = t.maybeUpdateTrace(ctx)
 	return t.Conversation.SendStream(ctx, callback)
 }
@@ -298,6 +313,7 @@ func (t *TracedConversation) ExportJSON() (string, error) {
 	snapshot := tracedConversationJSONSnapshot{
 		conversationJSONSnapshot: t.conversationSnapshot(),
 		Trace:                    trace,
+		Covered:                  t.covered,
 		TraceHistory:             t.traceHistory,
 	}
 
@@ -317,6 +333,10 @@ func (t *TracedConversation) ImportJSON(data string) error {
 	}
 
 	t.Conversation.applyConversationSnapshot(snapshot.conversationJSONSnapshot)
+	t.covered = snapshot.Covered
+	if t.covered < 0 || t.covered > len(t.History) {
+		t.covered = 0
+	}
 	t.trace = snapshot.Trace
 	if t.trace == "" {
 		t.trace = EmptyTraceState
@@ -349,6 +369,18 @@ func (t *TracedConversation) RollbackMessages(n int) int {
 
 	// 恢复 trace 状态：找到最后一个 MessageIndex <= 当前 History 长度的快照
 	currentLength := len(t.Conversation.History)
+	if t.budget > 0 {
+		if currentLength >= t.covered {
+			return deletedPairs
+		}
+		for len(t.traceHistory) > 0 && t.traceHistory[len(t.traceHistory)-1].MessageIndex > currentLength {
+			t.traceHistory = t.traceHistory[:len(t.traceHistory)-1]
+		}
+		t.covered = 0
+		if len(t.traceHistory) > 0 {
+			t.covered = t.traceHistory[len(t.traceHistory)-1].MessageIndex
+		}
+	}
 	t.restoreTraceAt(currentLength)
 
 	return deletedPairs
