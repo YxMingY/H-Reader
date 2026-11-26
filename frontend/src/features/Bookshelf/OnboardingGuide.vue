@@ -10,50 +10,9 @@
 
       <!-- 步骤指引 -->
       <div class="steps-container">
-        <!-- 步骤 1: API Key -->
-        <div class="step-card" :class="{ completed: hasApiKey, active: !hasApiKey }">
-          <div class="step-number">1</div>
-          <div class="step-content">
-            <h3>设置 API Key（可选）</h3>
-            <p v-if="!hasApiKey" class="step-desc">
-              AI 对话功能需要配置 API Key。<br/>
-              默认使用阿里云通义千问模型。
-            </p>
-            <p v-else class="step-desc success">
-              ✓ API Key 已配置
-            </p>
-            
-            <!-- API Key 未设置时的提示和链接 -->
-            <div v-if="!hasApiKey" class="api-key-info">
-              <p class="info-text">
-                💡 您可以稍后在设置中配置，或直接跳过此步骤开始使用阅读器。<br/>
-                🛠️ 后续可在设置中更改模型提供商和具体模型。
-              </p>
-              <a 
-                href="https://bailian.console.aliyun.com/cn-beijing?tab=model#/api-key" 
-                target="_blank"
-                class="info-link"
-              >
-                1. 点击前往阿里云注册获取 API Key<br/>
-              </a>
-              <p>2. 注册或登录后，进入控制台，选择“API Key” -> 左上角“创建 API Key”</p>
-              <p>3. 创建新的 API 密钥，并复制 Key</p>
-              <p>4. 将复制的 Key 粘贴到 H-Reader 的设置中完成配置。</p>
-            </div>
-            
-            <button 
-              v-if="!hasApiKey"
-              class="step-btn primary" 
-              @click="openSettings"
-            >
-              立即设置
-            </button>
-          </div>
-        </div>
-
-        <!-- 步骤 2: 选择文件夹 -->
+        <!-- 步骤 1: 选择文件夹 -->
         <div class="step-card" :class="{ completed: hasDefaultFolder, active: !hasDefaultFolder }">
-          <div class="step-number">2</div>
+          <div class="step-number">1</div>
           <div class="step-content">
             <h3>选择书籍文件夹</h3>
             <p v-if="!hasDefaultFolder" class="step-desc">
@@ -79,13 +38,28 @@
           </div>
         </div>
 
+        <!-- 步骤 2: 配置 AI 模型 -->
+        <div class="step-card">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h3>配置 AI 模型（可选）</h3>
+            <p class="step-desc">
+              如需使用 AI 对话，可在设置中添加你自己的 OpenAI 兼容服务，填写 API 地址、API Key 和模型。也可以稍后配置。
+            </p>
+            <p v-if="hasApiKey" class="step-desc success">✓ 已保存 API Key</p>
+            <button class="step-btn secondary" @click="openSettings">
+              打开设置
+            </button>
+          </div>
+        </div>
+
         <!-- 步骤 3: 开始使用 -->
         <div class="step-card" :class="{ completed: isReady, active: isReady }">
           <div class="step-number">3</div>
           <div class="step-content">
             <h3>开始阅读</h3>
             <p v-if="!isReady" class="step-desc">
-              完成必选项（选择文件夹）后即可开始阅读
+              选择书籍文件夹后即可进入书架
             </p>
             <p v-else class="step-desc success">
               ✓ 一切就绪，享受阅读吧！
@@ -104,7 +78,7 @@
       <div v-if="isReady" class="tip-box info">
         <span class="tip-icon">💡</span>
         <div class="tip-text">
-          <strong>小贴士：</strong>您可以随时在右上角的设置中修改 API Key 和文件夹路径
+          <strong>小贴士：</strong>你可以在右上角的设置中管理 AI 供应商和模型
         </div>
       </div>
     </div>
@@ -116,13 +90,12 @@
  * OnboardingGuide - 首次启动使用指南组件
  * 
  * 功能说明：
- * - 引导用户设置 API Key
+ * - 提供可选的 AI 模型设置入口
  * - 引导用户选择默认文件夹
  * - 检测配置状态并显示相应提示
  */
 
 import { computed } from 'vue';
-import { ChatService } from '../../../bindings/hreader/services/chat'; //这个路径是正确的，不要修改
 import { BookService } from '../../../bindings/hreader/services/book';
 
 const props = defineProps({
@@ -302,35 +275,6 @@ const startUsing = () => {
 .step-desc.success {
   color: #52c41a;
   font-weight: 500;
-}
-
-/* --- API Key 信息区域 --- */
-.api-key-info {
-  margin: 12px 0 16px 0;
-  padding: 12px 14px;
-  background: rgba(0, 122, 204, 0.06);
-  border-left: 3px solid var(--accent-color);
-  border-radius: 6px;
-}
-
-.info-text {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin: 0 0 8px 0;
-  line-height: 1.5;
-}
-
-.info-link {
-  display: inline-block;
-  color: var(--accent-color);
-  text-decoration: none;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.info-link:hover {
-  color: #005fa3;
-  text-decoration: underline;
 }
 
 /* --- 按钮样式 --- */
