@@ -29,6 +29,7 @@ import {
 import PdfPageShell from './components/PdfPageShell.vue';
 import AnnotationPin from './components/AnnotationPin.vue';
 import SelectionActionMenu from './components/SelectionActionMenu.vue';
+import { useNotes } from './composables/useNotes';
 
 // 定义组件属性
 const props = defineProps({
@@ -99,6 +100,43 @@ const { captureCurrentPage, startAreaSelection } = useScreenshot(currentPage, pa
  * - 通过 watch 监听 props 变化并同步更新
  */
 const bookPathRef = ref(props.bookPath || '');
+const { notesByPage, editing, saving, saveError, loadError, addNote, editNote, removeNote, flushNote } = useNotes(bookPathRef);
+const noteMenu = ref(null);
+
+function noteAnchor(point) {
+  if (!bookPathRef.value || !point) return null;
+  const page = findPageByPoint(point.x, point.y, pageCanvasRefs, totalPages.value);
+  if (!page?.rect.width || !page.rect.height) return null;
+  const { pageNum, rect } = page;
+  return { pageNum, x: (point.x - rect.left) / rect.width, y: (point.y - rect.top) / rect.height };
+}
+
+function openNoteMenu(event, action) {
+  if (!hasJumped.value) dismissSelectionMenu();
+  noteMenu.value = {
+    position: { x: event.clientX, top: event.clientY, bottom: event.clientY },
+    actions: [action],
+  };
+}
+
+function handleNoteContextMenu(event, note) {
+  openNoteMenu(event, {
+    id: 'delete-note',
+    label: '删除笔记',
+    run: async () => {
+      await removeNote(note);
+      noteMenu.value = null;
+    },
+  });
+}
+
+function closeNoteMenu(event) {
+  if (!event.target.closest?.('.selection-action-menu')) noteMenu.value = null;
+}
+
+function updateNoteDraft(text) {
+  if (editing.value) editing.value.text = text;
+}
 
 // ========================================
 // 公式导航管理
@@ -107,6 +145,8 @@ const bookPathRef = ref(props.bookPath || '');
 const {
   selectedFormula,
   selectedText,
+  selectionPoint,
+  selectedIsFormulaNumber,
   selectionActionPending,
   selectionInputActive,
   showFormulaPopup,
@@ -126,9 +166,9 @@ const {
   pageCanvasRefs,
 });
 const dictionaryEntry = ref(null);
-watch([selectedText, showFormulaPopup, selectedFormula], async ([text, open, formula], _, onCleanup) => {
+watch([selectedText, showFormulaPopup, selectedIsFormulaNumber], async ([text, open, isNumber], _, onCleanup) => {
   dictionaryEntry.value = null;
-  if (!open || formula || !text) return;
+  if (!open || isNumber || !text) return;
 
   let stale = false;
   onCleanup(() => { stale = true; });
@@ -144,11 +184,24 @@ const selectionActions = computed(() => {
   if (hasJumped.value) {
     return [{ id: 'return', label: '返回原位', run: returnToPreviousPosition }];
   }
-  if (selectedFormula.value) {
-    return [{ id: 'jump', label: '跳转公式', run: jumpToFormula }];
-  }
-
   const text = selectedText.value;
+  const anchor = noteAnchor(selectionPoint.value) ?? noteAnchor({
+    x: popupPosition.value.x,
+    y: (popupPosition.value.top + popupPosition.value.bottom) / 2,
+  });
+  const noteActions = anchor ? [{
+    id: 'add-note',
+    label: '添加笔记',
+    run: async () => {
+      await addNote(anchor, text);
+      dismissSelectionMenu();
+    },
+  }] : [];
+  if (selectedFormula.value) {
+    return [{ id: 'jump', label: '跳转公式', run: jumpToFormula }, ...noteActions];
+  }
+  if (selectedIsFormulaNumber.value) return noteActions;
+
   const useSelection = async (content, options) => {
     selectionActionPending.value = true;
     try {
@@ -167,6 +220,7 @@ const selectionActions = computed(() => {
       run: (question) => useSelection(`${question}：\n${text}`),
     },
     { id: 'explain', label: '解释这段内容', run: () => useSelection(`请解释下面这段内容：\n${text}`, { sendImmediately: true }) },
+    ...noteActions,
   ];
 });
 
@@ -320,11 +374,13 @@ watch(() => props.pdfSource, async (newSource) => {
 // - Reader 组件接收到新的 bookPath prop
 // - 触发此 watch，更新 bookPathRef
 watch(() => props.bookPath, (newBookPath) => {
+  noteMenu.value = null;
   bookPathRef.value = newBookPath || '';
 });
 
 // 组件挂载时加载 PDF
 onMounted(() => {
+  document.addEventListener('pointerdown', closeNoteMenu, true);
   if (props.pdfSource) {
     void DictionaryService.Prepare().catch(error => console.warn('离线词库加载失败', error));
     loadPdf(props.pdfSource);
@@ -334,6 +390,7 @@ onMounted(() => {
 // ⭐ 关键：组件卸载时清理 PDF.js 创建的 hidden canvas
 onBeforeUnmount(() => {
   // 清理公式导航监听
+  document.removeEventListener('pointerdown', closeNoteMenu, true);
   cleanupFormulaNav();
   
   // 清理 PDF.js 创建的隐藏 canvas 元素
@@ -355,7 +412,7 @@ const handleReaderClick = async (event) => {
   if (!isSelectingMode.value) return;
   
   // 如果点击的是大头针或其他 UI 元素，不处理
-  if (event.target.closest('.annotation-pin') || event.target.closest('.selection-mode-hint')) {
+  if (event.target.closest('.annotation-pin, .pdf-note-marker, .selection-mode-hint')) {
     return;
   }
   
@@ -395,13 +452,23 @@ const handleReaderClick = async (event) => {
  * 处理右键菜单（在选择模式下取消）
  */
 const handleReaderContextMenu = (event) => {
-  if (!isSelectingMode.value) return;
-  
-  // 阻止默认右键菜单
+  if (isSelectingMode.value) {
+    event.preventDefault();
+    cancelSelectionMode();
+    return;
+  }
+
+  const anchor = noteAnchor({ x: event.clientX, y: event.clientY });
+  if (!anchor) return;
   event.preventDefault();
-  
-  console.log('右键取消选择模式');
-  cancelSelectionMode();
+  openNoteMenu(event, {
+    id: 'add-note',
+    label: '添加笔记',
+    run: async () => {
+      await addNote(anchor);
+      noteMenu.value = null;
+    },
+  });
 };
 
 /**
@@ -457,6 +524,7 @@ const getPageHeight = (pageNum) => {
 
 // 暴露给父组件的方法和属性
 defineExpose({
+  flushNote,
   pdfDoc,           // PDF 文档对象
   totalPages,       // 总页数
   currentPage,      // 当前页码
@@ -493,6 +561,7 @@ defineExpose({
       👆 左键点击 PDF 页面放置大头针，右键取消
     </div>
     
+    <div v-if="loadError" class="note-load-error" role="alert">{{ loadError }}</div>
     <div class="pdf-canvas-container" ref="pdfCanvas">
       <PdfPageShell
         v-for="pageNum in totalPages"
@@ -500,15 +569,22 @@ defineExpose({
         :pageNum="pageNum"
         :register="RegisterPageRefs"
         :annotations="getPageAnnotations(pageNum)"
+        :notes="notesByPage.get(pageNum)"
+        :editing-note="editing"
+        :saving-note="saving"
+        :note-save-error="saveError"
         :pageWidth="pageWidth"
         :pageHeight="getPageHeight(pageNum)"
         @pin-dblclick="handlePinDoubleClick"
         @pin-remove="handleRemoveAnnotation"
+        @note-edit="editNote"
+        @note-draft="updateNoteDraft"
+        @note-contextmenu="handleNoteContextMenu"
       />
     </div>
     
     <SelectionActionMenu
-      v-if="showFormulaPopup"
+      v-if="showFormulaPopup && !noteMenu && selectionActions.length"
       :heading="selectedFormula ? `公式 (${selectedFormula.number}) · 第 ${selectedFormula.pageNum} 页` : ''"
       :actions="selectionActions"
       :dictionary-entry="dictionaryEntry"
@@ -516,6 +592,12 @@ defineExpose({
       :docked="hasJumped"
       @close="dismissSelectionMenu"
       @editing-change="selectionInputActive = $event"
+    />
+    <SelectionActionMenu
+      v-if="noteMenu"
+      :actions="noteMenu.actions"
+      :position="noteMenu.position"
+      @close="noteMenu = null"
     />
   </div>
 </template>
@@ -531,6 +613,11 @@ defineExpose({
   background: #525659;
   display: block; /* 改为 block，避免 flex 布局导致的居中问题 */
   padding: 20px;
+}
+
+.note-load-error {
+  color: #fff0d0;
+  margin-bottom: 8px;
 }
 
 .pdf-canvas-container {

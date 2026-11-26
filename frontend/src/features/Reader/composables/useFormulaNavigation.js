@@ -28,6 +28,8 @@ export function useFormulaNavigation({
   // 当前选中的公式信息
   const selectedFormula = ref(null);
   const selectedText = ref('');
+  const selectionPoint = ref(null);
+  const selectedIsFormulaNumber = ref(false);
   const selectionActionPending = ref(false);
   const selectionInputActive = ref(false);
   // 悬浮窗显示状态
@@ -142,6 +144,7 @@ export function useFormulaNavigation({
     selectionEvents = new AbortController();
     const options = { signal: selectionEvents.signal };
     let pointerDown = false;
+    let pointerEnd = null;
 
     function updateSelection() {
       if (isJumping || hasJumped.value || pointerDown || selectionActionPending.value || selectionInputActive.value) return;
@@ -167,14 +170,17 @@ export function useFormulaNavigation({
         ?? normalized.match(/^（(\d+(?:\.\d+)*)）$/)?.[1]
         ?? normalized.match(/^(\d+(?:\.\d+)*)$/)?.[1];
       const formula = formulaMap.value.get(formulaNumber);
-      if (formulaNumber && !formula) {
-        showFormulaPopup.value = false;
-        return;
-      }
-
       const rect = range.getBoundingClientRect();
+      const focusRange = range.cloneRange();
+      focusRange.collapse(selection.focusNode === range.startContainer && selection.focusOffset === range.startOffset);
+      const focusRect = focusRange.getBoundingClientRect();
+      selectionPoint.value = pointerEnd ?? {
+        x: focusRect.height ? focusRect.left : rect.right,
+        y: focusRect.height ? focusRect.top + focusRect.height / 2 : rect.bottom,
+      };
       popupPosition.value = { x: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom };
       selectedText.value = text;
+      selectedIsFormulaNumber.value = Boolean(formulaNumber);
       selectedFormula.value = formula ? { number: formulaNumber, ...formula } : null;
       showFormulaPopup.value = true;
     }
@@ -182,15 +188,20 @@ export function useFormulaNavigation({
     document.addEventListener('pointerdown', (event) => {
       if (event.target.closest('.selection-action-menu') || selectionActionPending.value) return;
       pointerDown = true;
+      pointerEnd = null;
       if (!hasJumped.value) showFormulaPopup.value = false;
     }, options);
     document.addEventListener('pointerup', (event) => {
       pointerDown = false;
-      if (readerContainer.value?.contains(event.target)) updateSelection();
+      if (event.button === 0 && readerContainer.value?.contains(event.target)) {
+        pointerEnd = { x: event.clientX, y: event.clientY };
+        updateSelection();
+      }
     }, options);
     document.addEventListener('pointercancel', () => { pointerDown = false; }, options);
     document.addEventListener('selectionchange', updateSelection, options);
     document.addEventListener('keydown', (event) => {
+      if (event.shiftKey && event.key.startsWith('Arrow')) pointerEnd = null;
       if (event.key === 'Escape' && !hasJumped.value && !selectionActionPending.value && !selectionInputActive.value) {
         showFormulaPopup.value = false;
       }
@@ -304,6 +315,8 @@ export function useFormulaNavigation({
     formulaMap,
     selectedFormula,
     selectedText,
+    selectionPoint,
+    selectedIsFormulaNumber,
     selectionActionPending,
     selectionInputActive,
     showFormulaPopup,

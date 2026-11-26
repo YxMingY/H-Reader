@@ -24,10 +24,6 @@ const props = defineProps({
         type: Number,
         required: true, // Y 坐标（像素）
     },
-    scale: {
-        type: Number,
-        default: 1, // 缩放比例
-    },
 });
 
 // 定义组件事件
@@ -70,7 +66,7 @@ const handleContextMenu = async (event) => {
 
 <template>
     <div
-        class="annotation-pin"
+        class="annotation-pin pdf-page-marker"
         :style="{ 
             left: x + 'px', 
             top: y + 'px'
@@ -81,7 +77,7 @@ const handleContextMenu = async (event) => {
         @mouseleave="isHovered = false"
     >
         <!-- 大头针图标 -->
-        <div class="pin-icon" :style="{ fontSize: (12 * scale) + 'px' }">📌</div>
+        <div class="pdf-marker-icon">📌</div>
         
         <!-- Hover 提示框 -->
         <div v-if="isHovered" class="pin-tooltip">
@@ -98,18 +94,6 @@ const handleContextMenu = async (event) => {
     z-index: 100;
     cursor: pointer;
     transform: translate(-50%, -50%); /* 居中定位 */
-    transition: filter 0.2s ease;
-}
-
-.annotation-pin:hover {
-    filter: brightness(1.2) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
-}
-
-.pin-icon {
-    font-size: 8px;
-    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-    user-select: none;
-    opacity: 0.7;
 }
 
 .pin-tooltip {

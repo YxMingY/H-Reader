@@ -8,8 +8,9 @@
  * - 大头针标注显示
  * - 向父组件注册 DOM 引用以便管理
  */
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 import AnnotationPin from './AnnotationPin.vue';
+import NoteMarker from './NoteMarker.vue';
 
 // 定义组件属性
 const props = defineProps({
@@ -25,6 +26,10 @@ const props = defineProps({
     type: Array,
     default: () => [], // 当前页的大头针列表
   },
+  notes: { type: Array, default: () => [] },
+  editingNote: { type: Object, default: null },
+  savingNote: Boolean,
+  noteSaveError: { type: String, default: '' },
   pageWidth: {
     type: Number,
     default: 600, // 页面宽度
@@ -36,7 +41,7 @@ const props = defineProps({
 });
 
 // 定义组件事件
-const emit = defineEmits(['pin-dblclick', 'pin-remove']);
+const emit = defineEmits(['pin-dblclick', 'pin-remove', 'note-edit', 'note-draft', 'note-contextmenu']);
 
 // DOM 元素引用
 const container = ref(null); // 页面容器元素
@@ -73,15 +78,8 @@ const getPinPosition = (annotation) => {
   };
 };
 
-/**
- * 计算大头针图标的缩放比例
- * 基于当前页面宽度与标准宽度（732px）的比例
- */
-const getPinScale = () => {
-  const standardWidth = 732; // 标准页面宽度（首次渲染时的宽度）
-  const scale = Math.max(0.5, Math.min(2.0, props.pageWidth / standardWidth));
-  return scale;
-};
+// Both PDF markers use the same 12px icon size at a page width of 732px.
+const markerSize = computed(() => 12 * Math.max(0.5, Math.min(2, props.pageWidth / 732)));
 
 /**
  * 处理大头针双击
@@ -99,7 +97,12 @@ const handlePinRemove = (annotationId) => {
 </script>
 
 <template>
-  <div ref="container" class="pdf-page-container" :data-page-num="pageNum">
+  <div
+    ref="container"
+    class="pdf-page-container"
+    :data-page-num="pageNum"
+    :style="{ '--pdf-marker-size': markerSize + 'px' }"
+  >
     <canvas ref="canvas" class="pdf-page-canvas"></canvas>
     <div ref="textLayer" class="pdf-text-layer-host"></div>
     
@@ -110,9 +113,20 @@ const handlePinRemove = (annotationId) => {
       :annotation="annotation"
       :x="getPinPosition(annotation).x"
       :y="getPinPosition(annotation).y"
-      :scale="getPinScale()"
       @dblclick="handlePinDoubleClick"
       @remove="handlePinRemove"
+    />
+    <NoteMarker
+      v-for="note in notes"
+      :key="note.id"
+      :note="note"
+      :editing="editingNote?.note.id === note.id"
+      :draft="editingNote?.text"
+      :saving="savingNote"
+      :error="noteSaveError"
+      @edit="emit('note-edit', $event)"
+      @update:draft="emit('note-draft', $event)"
+      @contextmenu="(event, item) => emit('note-contextmenu', event, item)"
     />
   </div>
 </template>
@@ -130,6 +144,22 @@ const handlePinRemove = (annotationId) => {
   top: 0;
   right: 0;
   bottom: 0;
+}
+
+.pdf-page-container :deep(.pdf-page-marker) {
+  transition: filter 0.2s ease;
+}
+
+.pdf-page-container :deep(.pdf-page-marker:hover) {
+  filter: brightness(1.2) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
+}
+
+.pdf-page-container :deep(.pdf-marker-icon) {
+  display: block;
+  font-size: var(--pdf-marker-size);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  user-select: none;
+  opacity: 0.7;
 }
 
 .pdf-page-canvas {

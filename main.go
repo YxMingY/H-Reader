@@ -33,6 +33,7 @@ func main() {
 			application.NewService(&GreetService{}),
 			application.NewService(&book.BookService{}),
 			application.NewService(&book.AnnotationService{}),
+			application.NewService(&book.NoteService{}),
 			application.NewService(chat.NewChatService()),
 			application.NewService(&dictionary.DictionaryService{}),
 		},

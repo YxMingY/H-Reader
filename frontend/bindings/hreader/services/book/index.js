@@ -4,12 +4,15 @@
 
 import * as AnnotationService from "./annotationservice.js";
 import * as BookService from "./bookservice.js";
+import * as NoteService from "./noteservice.js";
 export {
     AnnotationService,
-    BookService
+    BookService,
+    NoteService
 };
 
 export {
     Annotation,
-    BookInfo
+    BookInfo,
+    Note
 } from "./models.js";

@@ -436,7 +436,8 @@ const openBook = async (book) => {
  * - 不需要手动保存进度，因为 useReadingProgress 已经设置了自动保存
  * - 用户离开时的页码已经被异步保存到后端
  */
-const goBack = () => {
+const goBack = async () => {
+  if (readerRef.value && !await readerRef.value.flushNote()) return;
   view.value = 'library';
   currentBookPath.value = '';  // 清空路径，触发 Reader 卸载
   pdfSource.value = null;
