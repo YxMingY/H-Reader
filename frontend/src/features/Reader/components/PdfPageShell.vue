@@ -149,7 +149,7 @@ const handlePinRemove = (annotationId) => {
       class="pdf-inline-marker pdf-page-marker"
       :style="{ left: `${marker.x * 100}%`, top: `${marker.y * 100}%`, marginLeft: `${offset * markerSize * 1.4}px` }"
       aria-label="打开原地问对话"
-      @click.stop="emit('open-inline-ask', 'inline-ask-contextmenu', marker)"
+      @click.stop="emit('open-inline-ask', marker)"
       @contextmenu.prevent.stop="emit('inline-ask-contextmenu', $event, marker)"
     ><span class="pdf-marker-icon" aria-hidden="true">💬</span></button>
   </div>
