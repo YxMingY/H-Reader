@@ -61,6 +61,12 @@ function handleInputEscape(event) {
   cancelInput();
 }
 
+function handleMenuEscape(event) {
+  if (event.key === 'Escape' && !event.isComposing && !inputAction.value && !pending.value) {
+    emit('close');
+  }
+}
+
 async function submitInput() {
   const value = inputValue.value.trim();
   if (!inputAction.value || !value) return;
@@ -88,9 +94,11 @@ watch([error, () => props.dictionaryEntry], placeMenu, { flush: 'post' });
 onMounted(() => {
   placeMenu();
   window.addEventListener('resize', placeMenu);
+  document.addEventListener('keydown', handleMenuEscape);
 });
 onBeforeUnmount(() => {
   window.removeEventListener('resize', placeMenu);
+  document.removeEventListener('keydown', handleMenuEscape);
   if (inputAction.value) emit('editing-change', false);
 });
 </script>
@@ -134,7 +142,6 @@ onBeforeUnmount(() => {
           :disabled="pending"
           @click="chooseAction(action)"
         >{{ action.label }}</button>
-        <button type="button" aria-label="关闭选区菜单" :disabled="pending" @click="emit('close')">×</button>
       </div>
       <div v-if="error" class="selection-error" role="alert">{{ error }}</div>
     </div>

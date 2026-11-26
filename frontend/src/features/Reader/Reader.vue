@@ -39,7 +39,7 @@ const props = defineProps({
 });
 
 // 定义组件事件
-const emit = defineEmits(['loaded', 'pagechange', 'navigate-to-message']);
+const emit = defineEmits(['loaded', 'pagechange', 'navigate-to-message', 'ask-in-place']);
 
 // DOM 元素引用
 const readerContainer = ref(null); // 阅读器容器元素
@@ -111,23 +111,44 @@ function noteAnchor(point) {
   return { pageNum, x: (point.x - rect.left) / rect.width, y: (point.y - rect.top) / rect.height };
 }
 
-function openNoteMenu(event, action) {
+function openNoteMenu(event, actions) {
   if (!hasJumped.value) dismissSelectionMenu();
   noteMenu.value = {
     position: { x: event.clientX, top: event.clientY, bottom: event.clientY },
-    actions: [action],
+    actions,
   };
 }
 
+function pageActions(anchor, text, close) {
+  return [
+    {
+      id: 'add-note',
+      label: '笔记',
+      run: async () => {
+        await addNote(anchor, text);
+        close();
+      },
+    },
+    {
+      id: 'ask-in-place',
+      label: '原地问',
+      run: () => {
+        emit('ask-in-place', { ...anchor, text });
+        close();
+      },
+    },
+  ];
+}
+
 function handleNoteContextMenu(event, note) {
-  openNoteMenu(event, {
+  openNoteMenu(event, [{
     id: 'delete-note',
     label: '删除笔记',
     run: async () => {
       await removeNote(note);
       noteMenu.value = null;
     },
-  });
+  }]);
 }
 
 function closeNoteMenu(event) {
@@ -189,18 +210,11 @@ const selectionActions = computed(() => {
     x: popupPosition.value.x,
     y: (popupPosition.value.top + popupPosition.value.bottom) / 2,
   });
-  const noteActions = anchor ? [{
-    id: 'add-note',
-    label: '添加笔记',
-    run: async () => {
-      await addNote(anchor, text);
-      dismissSelectionMenu();
-    },
-  }] : [];
+  const availablePageActions = anchor ? pageActions(anchor, text, dismissSelectionMenu) : [];
   if (selectedFormula.value) {
-    return [{ id: 'jump', label: '跳转公式', run: jumpToFormula }, ...noteActions];
+    return [{ id: 'jump', label: '跳转公式', run: jumpToFormula }, ...availablePageActions];
   }
-  if (selectedIsFormulaNumber.value) return noteActions;
+  if (selectedIsFormulaNumber.value) return availablePageActions;
 
   const useSelection = async (content, options) => {
     selectionActionPending.value = true;
@@ -217,10 +231,21 @@ const selectionActions = computed(() => {
       id: 'ask',
       label: '提问',
       inputPlaceholder: '输入你的问题',
-      run: (question) => useSelection(`${question}：\n${text}`),
+      run: (question) => useSelection(`${question}：\n${text}`, { trailingNewline: false }),
     },
-    { id: 'explain', label: '解释这段内容', run: () => useSelection(`请解释下面这段内容：\n${text}`, { sendImmediately: true }) },
-    ...noteActions,
+    {
+      id: 'explain',
+      label: '解释',
+      run: async () => {
+        const word = text.replace(/^[\s\p{P}]+|[\s\p{P}]+$/gu, '');
+        const isWord = /^[a-z]+(?:['’‘‐‑-][a-z]+)*$/i.test(word) ||
+          Boolean(dictionaryEntry.value) ||
+          (/[\r\n\u2028]/.test(word) && Boolean(await DictionaryService.Lookup(text).catch(() => null)));
+        const prompt = isWord ? '解释这个词' : '解释以下内容';
+        await useSelection(`${prompt}：\n${text}`, { sendImmediately: true });
+      },
+    },
+    ...availablePageActions,
   ];
 });
 
@@ -461,14 +486,7 @@ const handleReaderContextMenu = (event) => {
   const anchor = noteAnchor({ x: event.clientX, y: event.clientY });
   if (!anchor) return;
   event.preventDefault();
-  openNoteMenu(event, {
-    id: 'add-note',
-    label: '添加笔记',
-    run: async () => {
-      await addNote(anchor);
-      noteMenu.value = null;
-    },
-  });
+  openNoteMenu(event, pageActions(anchor, '', () => { noteMenu.value = null; }));
 };
 
 /**

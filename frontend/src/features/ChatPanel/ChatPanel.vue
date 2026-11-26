@@ -375,7 +375,7 @@ watch(
 // 公开 API
 // ========================================
 
-const applyPdfSelection = async (content, { sendImmediately = false } = {}) => {
+const applyPdfSelection = async (content, { sendImmediately = false, trailingNewline = true } = {}) => {
   if (sendImmediately) {
     if (sending.value) throw new Error('正在生成回复，请稍后重试。');
     draft.value = content;
@@ -388,7 +388,7 @@ const applyPdfSelection = async (content, { sendImmediately = false } = {}) => {
     if (!activeSessionId.value) throw new Error(errorMessage.value || '创建会话失败，请重试。');
   }
   const separator = draft.value && !draft.value.endsWith('\n') ? '\n' : '';
-  draft.value += `${separator}${content}\n`;
+  draft.value += separator + content + (trailingNewline ? '\n' : '');
   await nextTick();
   inputAreaRef.value?.focusAtEnd();
 };
