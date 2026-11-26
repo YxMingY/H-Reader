@@ -38,7 +38,11 @@ var (
 	englishWord = regexp.MustCompile(`^[a-z]+(?:['-][a-z]+)*$`)
 	lineBreak   = regexp.MustCompile(`[\t\p{Zs}]*(?:\r\n|[\r\n\x{2028}])[\t\p{Zs}]*`)
 	punctuation = strings.NewReplacer("’", "'", "‘", "'", "‑", "-", "‐", "-")
-	loadIndex   = sync.OnceValues(func() (*dictionaryIndex, error) { return buildIndex(ecdictCSV) })
+	ligatures   = strings.NewReplacer(
+		"ﬀ", "ff", "ﬁ", "fi", "ﬂ", "fl", "ﬃ", "ffi",
+		"ﬄ", "ffl", "ﬅ", "st", "ﬆ", "st",
+	)
+	loadIndex = sync.OnceValues(func() (*dictionaryIndex, error) { return buildIndex(ecdictCSV) })
 )
 
 type DictionaryService struct{}
@@ -71,7 +75,7 @@ func lookupWords(selection string) (string, string) {
 	word := strings.TrimFunc(selection, func(r rune) bool {
 		return unicode.IsSpace(r) || unicode.IsPunct(r)
 	})
-	word = strings.ToLower(punctuation.Replace(word))
+	word = strings.ToLower(punctuation.Replace(ligatures.Replace(word)))
 	if englishWord.MatchString(word) {
 		return word, ""
 	}

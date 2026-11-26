@@ -53,6 +53,29 @@ func TestEmbeddedECDICT(t *testing.T) {
 	}
 }
 
+func TestLookupLigatures(t *testing.T) {
+	service := &DictionaryService{}
+	for selection, want := range map[string]string{
+		" signiﬁcant": "significant",
+		"coﬀee":       "coffee",
+		"ﬂower":       "flower",
+		"oﬃce":        "office",
+		"waﬄe":        "waffle",
+		"ﬅudy":        "study",
+		"ﬆudy":        "study",
+	} {
+		t.Run(selection, func(t *testing.T) {
+			entry, err := service.Lookup(selection)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if entry == nil || entry.Word != want || entry.Translation == "" {
+				t.Fatalf("expected %q with translation, got %+v", want, entry)
+			}
+		})
+	}
+}
+
 func TestLookupWrappedWords(t *testing.T) {
 	service := &DictionaryService{}
 	for _, test := range []struct {
