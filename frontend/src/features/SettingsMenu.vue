@@ -2,79 +2,102 @@
   <Teleport to="body">
     <Transition name="settings-fade">
       <div v-if="open" class="settings-layer" @click.self="close">
-        <div class="settings-panel" role="dialog" aria-modal="true" aria-label="设置菜单">
+        <div class="settings-panel" role="dialog" aria-modal="true" aria-label="设置">
           <div class="settings-header">
-            <div>
-              <h3 class="settings-title">设置</h3>
-              <p class="settings-subtitle">当前仅部分模型，后续会继续扩展。</p>
-            </div>
-            <button class="settings-close" type="button" @click="close" aria-label="关闭设置">×</button>
+            <h3 class="settings-title">设置</h3>
+            <button class="settings-close" type="button" :disabled="saving" @click="close" aria-label="关闭设置">×</button>
           </div>
 
-          <div class="settings-body">
-            <!-- API Key -->
-            <label class="settings-label" for="api-key-input">API_KEY（{{ getProviderLabel(draftProvider) }}）</label>
-            <input
-              id="api-key-input"
-              :value="currentDraftKey"
-              @input="updateCurrentDraftKey($event.target.value)"
-              class="settings-input"
-              type="text"
-              spellcheck="false"
-              autocomplete="off"
-              placeholder="输入后端 API_KEY"
-              @keyup.enter="submit"
-            />
-            <p class="settings-hint">保存后会写入本地 config.json，每个提供商可以有独立的 API Key。</p>
+          <p v-if="loading" class="settings-hint" role="status">正在读取设置…</p>
+          <p v-if="error && !editing" class="settings-error" role="alert">{{ error }}</p>
 
-            <!-- 模型提供商 -->
-            <label class="settings-label" for="provider-select" style="margin-top: 18px;">模型提供商</label>
-            <select
-              id="provider-select"
-              v-model="draftProvider"
-              class="settings-select"
-              @change="onProviderChange"
-            >
-              <option value="aliyun">阿里云百炼</option>
-              <option value="deepseek">DeepSeek</option>
-              <option value="glm">智谱 GLM</option>
-            </select>
+          <template v-if="!loading">
+            <section class="settings-section">
+              <h4>供应商配置</h4>
+              <ul v-if="settings.profiles.length" class="profile-list">
+                <li v-for="profile in settings.profiles" :key="profile.id" class="profile-row">
+                  <div>
+                    <strong>{{ profile.name }}</strong>
+                    <small>{{ providers[profile.provider] || profile.provider }} · {{ profile.models.length }} 个模型 · {{ profile.hasKey ? '已设置 Key' : '未设置 Key' }}</small>
+                  </div>
+                  <button class="settings-button secondary" type="button" :disabled="saving" @click="editProfile(profile)" :aria-label="`编辑 ${profile.name}`">编辑</button>
+                </li>
+              </ul>
+              <button v-if="!editing" class="settings-button secondary" type="button" :disabled="saving" @click="editProfile()">新增供应商</button>
 
-            <!-- 具体模型 -->
-            <label class="settings-label" for="model-select">具体模型</label>
-            <select
-              id="model-select"
-              v-model="draftModel"
-              class="settings-select"
-            >
-              <option v-for="model in availableModels" :key="model.value" :value="model.value">
-                {{ model.label }}
-                <span v-if="model.multimodal" class="multimodal-badge">🖼️</span>
-              </option>
-              <option value="__custom__">✏️ 自定义模型...</option>
-            </select>
-            
-            <!-- 自定义模型输入框 -->
-            <div v-if="draftModel === '__custom__'" class="custom-model-input">
-              <input
-                v-model="customModelName"
-                class="settings-input"
-                type="text"
-                spellcheck="false"
-                autocomplete="off"
-                placeholder="输入自定义模型名称"
-                @keyup.enter="submit"
-              />
-              <p class="settings-hint">输入您要使用的自定义模型名称。</p>
-            </div>
-            
-            <p v-else class="settings-hint">选择您要使用的 AI 模型。<span v-if="selectedModel?.multimodal">该模型支持图片理解。</span></p>
-          </div>
+              <form v-if="editing" class="profile-editor" @submit.prevent="submitProfile">
+                <label class="settings-label" for="profile-name">配置名称</label>
+                <input id="profile-name" v-model.trim="draft.name" class="settings-input" :disabled="saving" required />
 
-          <div class="settings-actions">
-            <button class="settings-button secondary" type="button" @click="close">取消</button>
-            <button class="settings-button primary" type="button" @click="submit">保存</button>
-          </div>
+                <label class="settings-label" for="profile-provider">供应商</label>
+                <select id="profile-provider" v-model="draft.provider" class="settings-select" :disabled="saving" @change="changeProvider">
+                  <option v-if="!providers[draft.provider]" :value="draft.provider">{{ draft.provider }}</option>
+                  <option v-for="(label, provider) in providers" :key="provider" :value="provider" :disabled="providerUnavailable(provider)">{{ label }}</option>
+                </select>
+
+                <template v-if="draft.provider === 'custom'">
+                  <label class="settings-label" for="profile-base-url">API 地址</label>
+                  <input id="profile-base-url" v-model.trim="draft.baseUrl" class="settings-input" type="url" placeholder="https://example.com/v1" :disabled="saving" required />
+                  <p class="settings-hint">支持 OpenAI 兼容的 Chat Completions 接口。</p>
+                </template>
+
+                <label class="settings-label" for="profile-api-key">API Key</label>
+                <input
+                  id="profile-api-key"
+                  v-model.trim="draft.apiKey"
+                  class="settings-input"
+                  type="password"
+                  autocomplete="off"
+                  spellcheck="false"
+                  :placeholder="canKeepKey ? '留空保留已保存的 Key' : '输入 API Key'"
+                  :required="!canKeepKey"
+                  :disabled="saving"
+                />
+                <label class="settings-label" for="new-model-name">模型列表</label>
+                <ul v-if="draft.models.length" class="profile-list">
+                  <li v-for="model in draft.models" :key="model" class="profile-row">
+                    <small>{{ model }}</small>
+                    <button type="button" class="settings-button secondary" :disabled="saving" :aria-label="`删除模型 ${model}`" @click="removeModel(model)">删除</button>
+                  </li>
+                </ul>
+                <div class="model-input-row">
+                  <input id="new-model-name" v-model.trim="modelName" class="settings-input" placeholder="输入模型名称" spellcheck="false" :disabled="saving" @keydown.enter.prevent="addModel" />
+                  <button type="button" class="settings-button secondary" :disabled="saving || !canAddModel" @click="addModel">添加</button>
+                </div>
+                <select v-if="availablePresets.length" class="settings-select preset-select" aria-label="添加预置模型" :disabled="saving" @change="addPreset">
+                  <option value="">添加预置模型</option>
+                  <option v-for="model in availablePresets" :key="model.value" :value="model.value">{{ model.label }}</option>
+                </select>
+                <p v-if="clearedRoutes.length" class="settings-error" role="status">保存后，{{ clearedRoutes.join('、') }}需要重新选择模型。</p>
+                <p v-if="error" class="settings-error" role="alert">{{ error }}</p>
+                <div class="settings-actions">
+                  <button class="settings-button secondary" type="button" :disabled="saving" @click="dismissEditor">取消编辑</button>
+                  <button class="settings-button primary" type="submit" :disabled="saving">保存配置</button>
+                </div>
+              </form>
+            </section>
+
+            <section class="settings-section">
+              <h4>对话使用的配置</h4>
+              <div v-for="route in routes" :key="route.id" class="routing-entry">
+                <label class="settings-label" :for="`${route.id}-api-profile`">{{ route.label }}供应商</label>
+                <select :id="`${route.id}-api-profile`" v-model="choices[route.id].profileId" class="settings-select" :disabled="saving || editing" @change="choices[route.id].model = ''">
+                  <option value="">未选择供应商</option>
+                  <option v-for="profile in selectableProfiles" :key="profile.id" :value="profile.id">{{ profile.name }}</option>
+                </select>
+                <label class="settings-label" :for="`${route.id}-api-model`">{{ route.label }}模型</label>
+                <select :id="`${route.id}-api-model`" v-model="choices[route.id].model" class="settings-select" :disabled="saving || editing || !choices[route.id].profileId">
+                  <option value="">未选择模型</option>
+                  <option v-for="model in modelsForRoute(route.id)" :key="model" :value="model">{{ modelLabel(route.id, model) }}</option>
+                </select>
+                <p v-if="route.id === 'sidebar'" class="settings-hint">使用截图提问时，请选择支持图片输入的模型。</p>
+              </div>
+              <div v-if="!editing" class="settings-actions">
+                <button class="settings-button secondary" type="button" :disabled="saving" @click="close">关闭</button>
+                <button class="settings-button primary" type="button" :disabled="saving || !selectionChanged" @click="submitSelections">保存选择</button>
+              </div>
+            </section>
+          </template>
         </div>
       </div>
     </Transition>
@@ -82,40 +105,28 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 
 const props = defineProps({
   open: Boolean,
-  apiKeys: {
-    type: Object,
-    default: () => ({
-      aliyun: '',
-      deepseek: '',
-      glm: '',
-    }),
-  },
-  provider: {
-    type: String,
-    default: 'aliyun',
-  },
-  model: {
-    type: String,
-    default: 'qwen3.8-flash',
-  },
+  settings: { type: Object, required: true },
+  loading: Boolean,
+  saving: Boolean,
+  error: String,
+  saveProfile: { type: Function, required: true },
 });
 
-const emit = defineEmits(['update:open', 'save']);
+const emit = defineEmits(['update:open', 'save-selections']);
 
-const draftApiKeys = ref({
-  aliyun: '',
-  deepseek: '',
-  glm: '',
-});
-const draftProvider = ref('aliyun');
-const draftModel = ref('qwen3.8-flash');
-const customModelName = ref('');
+const providers = {
+  aliyun: '阿里云百炼',
+  deepseek: 'DeepSeek',
+  glm: '智谱 GLM',
+  openai: 'OpenAI',
+  moonshot: 'Moonshot',
+  custom: '自定义供应商',
+};
 
-// 各提供商的可用模型列表
 const modelOptions = {
   aliyun: [
     { value: 'qwen3.8-flash', label: 'Qwen 3.8 Flash', multimodal: true },
@@ -139,98 +150,120 @@ const modelOptions = {
   ],
 };
 
-// 当前提供商的可用模型
-const availableModels = computed(() => {
-  return modelOptions[draftProvider.value] || [];
-});
+const routes = [
+  { id: 'sidebar', label: '右侧栏对话' },
+  { id: 'inline', label: '原地问' },
+];
+const draft = ref(null);
+const modelName = ref('');
+const choices = reactive({});
+const editing = computed(() => draft.value !== null);
+const selectableProfiles = computed(() => props.settings.profiles.filter(profile => profile.hasKey));
+const canAddModel = computed(() => modelName.value !== '' && !draft.value?.models.includes(modelName.value));
+const availablePresets = computed(() => (modelOptions[draft.value?.provider] || [])
+  .filter(model => !draft.value.models.includes(model.value)));
+const selectionChanged = computed(() => routes.some(({ id }) =>
+  !sameSelection(choices[id], props.settings.selections[id])
+));
+const clearedRoutes = computed(() => routes.filter(({ id }) => {
+  const current = props.settings.selections[id];
+  return draft.value?.id && current.profileId === draft.value.id &&
+    current.model && !draft.value.models.includes(current.model);
+}).map(route => route.label));
+const canKeepKey = computed(() => props.settings.profiles.some(profile =>
+  profile.id === draft.value?.id && profile.provider === draft.value.provider &&
+  profile.baseUrl === draft.value.baseUrl && profile.hasKey
+));
 
-// 当前选中的模型对象
-const selectedModel = computed(() => {
-  return availableModels.value.find(m => m.value === draftModel.value);
-});
+function sameSelection(a, b) {
+  return a.profileId === b.profileId && a.model === b.model;
+}
 
-watch(
-  () => props.open,
-  (isOpen) => {
-    if (isOpen) {
-      // 加载所有提供商的 API Keys
-      draftApiKeys.value = {
-        aliyun: props.apiKeys?.aliyun || '',
-        deepseek: props.apiKeys?.deepseek || '',
-        glm: props.apiKeys?.glm || '',
-      };
-      draftProvider.value = props.provider || 'aliyun';
-      draftModel.value = props.model || 'qwen3.8-flash';
-      // 检查当前模型是否在预设列表中，如果不在则设为自定义
-      const isInList = availableModels.value.some(m => m.value === draftModel.value);
-      if (!isInList && draftModel.value) {
-        customModelName.value = draftModel.value;
-        draftModel.value = '__custom__';
-      } else {
-        customModelName.value = '';
-      }
-    }
+watch(() => props.open, (open) => {
+  if (!open) dismissEditor();
+  for (const { id } of routes) choices[id] = { ...props.settings.selections[id] };
+}, { immediate: true });
+
+watch(() => props.settings.selections, (next, previous) => {
+  for (const { id } of routes) {
+    if (!sameSelection(next[id], previous[id])) choices[id] = { ...next[id] };
   }
-);
-
-/**
- * 当提供商改变时，自动选择该提供商的第一个模型
- */
-const onProviderChange = () => {
-  const models = modelOptions[draftProvider.value];
-  if (models && models.length > 0) {
-    draftModel.value = models[0].value;
-    customModelName.value = '';
-  }
-};
-
-/**
- * 获取当前 provider 对应的 draft key
- */
-const currentDraftKey = computed(() => {
-  return draftApiKeys.value[draftProvider.value] || '';
 });
 
-/**
- * 更新当前 provider 的 draft key
- */
-const updateCurrentDraftKey = (value) => {
-  draftApiKeys.value[draftProvider.value] = value;
-};
+function profileForRoute(id) {
+  return selectableProfiles.value.find(profile => profile.id === choices[id].profileId);
+}
 
-/**
- * 获取提供商的中文标签
- */
-const getProviderLabel = (provider) => {
-  const labels = {
-    aliyun: '阿里云',
-    deepseek: 'DeepSeek',
-    glm: '智谱 GLM',
-  };
-  return labels[provider] || provider;
-};
+function modelsForRoute(id) {
+  return profileForRoute(id)?.models || [];
+}
 
-const close = () => {
-  emit('update:open', false);
-};
+function modelLabel(id, name) {
+  const options = modelOptions[profileForRoute(id)?.provider] || [];
+  const preset = options.find(model => model.value === name);
+  return preset?.multimodal ? `${name} · 支持图片` : name;
+}
 
-const submit = () => {
-  // 如果是自定义模型，使用输入的模型名称
-  const finalModel = draftModel.value === '__custom__' ? customModelName.value.trim() : draftModel.value;
-  
-  if (draftModel.value === '__custom__' && !finalModel) {
-    alert('请输入自定义模型名称');
+function providerUnavailable(provider) {
+  return provider !== 'custom' &&
+    props.settings.profiles.some(profile => profile.provider === provider && profile.id !== draft.value?.id);
+}
+
+function changeProvider() {
+  draft.value.baseUrl = '';
+  draft.value.apiKey = '';
+  draft.value.models = (modelOptions[draft.value.provider] || []).map(model => model.value);
+  modelName.value = '';
+}
+
+function editProfile(profile) {
+  modelName.value = '';
+  if (profile) {
+    draft.value = { ...profile, models: [...profile.models], apiKey: '' };
     return;
   }
-  
-  emit('save', {
-    apiKeys: { ...draftApiKeys.value },
-    provider: draftProvider.value,
-    model: finalModel,
-  });
-  // 保存后自动关闭设置菜单
-  close();
-};
+  const provider = Object.keys(providers).find(value => !providerUnavailable(value));
+  draft.value = { id: '', name: '', provider, apiKey: '', baseUrl: '', models: [] };
+  changeProvider();
+}
+
+function addModel() {
+  if (!canAddModel.value || props.saving) return;
+  draft.value.models.push(modelName.value);
+  modelName.value = '';
+}
+
+function addPreset(event) {
+  if (event.target.value) draft.value.models.push(event.target.value);
+  event.target.value = '';
+}
+
+function removeModel(model) {
+  draft.value.models = draft.value.models.filter(name => name !== model);
+}
+
+function dismissEditor() {
+  draft.value = null;
+  modelName.value = '';
+}
+
+function close() {
+  if (!props.saving) {
+    dismissEditor();
+    emit('update:open', false);
+  }
+}
+
+async function submitProfile() {
+  if (props.saving) return;
+  addModel();
+  const { id, name, provider, baseUrl, models, apiKey } = draft.value;
+  if (await props.saveProfile({ id, name, provider, baseUrl, models, apiKey })) dismissEditor();
+}
+
+function submitSelections() {
+  emit('save-selections', { sidebar: { ...choices.sidebar }, inline: { ...choices.inline } });
+}
 </script>
 
 <style scoped>
@@ -246,7 +279,10 @@ const submit = () => {
   position: fixed;
   top: 72px;
   right: 20px;
-  width: min(360px, calc(100vw - 32px));
+  width: min(420px, calc(100vw - 32px));
+  box-sizing: border-box;
+  max-height: calc(100dvh - 88px);
+  overflow: auto;
   border-radius: 16px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   background: rgba(255, 255, 255, 0.96);
@@ -268,13 +304,6 @@ const submit = () => {
   line-height: 1.2;
 }
 
-.settings-subtitle {
-  margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text-secondary);
-}
-
 .settings-close {
   width: 30px;
   height: 30px;
@@ -292,8 +321,73 @@ const submit = () => {
   color: var(--text-primary);
 }
 
-.settings-body {
-  margin-top: 18px;
+.settings-section, .profile-editor {
+  margin: 16px 0 0;
+  padding: 14px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border-color);
+}
+
+.settings-section h4 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.model-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preset-select {
+  margin-top: 8px;
+}
+
+.routing-entry + .routing-entry {
+  margin-top: 16px;
+}
+
+.profile-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  margin: 0 0 10px;
+  list-style: none;
+}
+
+.profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.profile-row strong, .profile-row small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.profile-row strong {
+  font-size: 13px;
+}
+
+.profile-row small {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.settings-error {
+  color: #a22626;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.settings-label:not(:first-child) {
+  margin-top: 12px;
 }
 
 .settings-label {
@@ -344,20 +438,11 @@ const submit = () => {
   box-shadow: 0 0 0 3px rgba(0, 122, 204, 0.12);
 }
 
-.multimodal-badge {
-  margin-left: 6px;
-  font-size: 14px;
-}
-
 .settings-hint {
   margin: 10px 0 0;
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-secondary);
-}
-
-.custom-model-input {
-  margin-top: 10px;
 }
 
 .settings-actions {
@@ -387,7 +472,12 @@ const submit = () => {
   color: #fff;
 }
 
-.settings-button:hover {
+.settings-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.settings-button:not(:disabled):hover {
   opacity: 0.95;
 }
 

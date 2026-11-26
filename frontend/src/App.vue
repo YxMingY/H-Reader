@@ -25,10 +25,12 @@
             </button>
             <SettingsMenu
               v-model:open="settingsOpen"
-              :api-keys="apiKeys"
-              :provider="modelProvider"
-              :model="modelName"
-              @save="saveSettings"
+              :settings="apiSettings"
+              :loading="settingsLoading"
+              :saving="settingsSaving"
+              :error="settingsError"
+              :save-profile="saveApiProfile"
+              @save-selections="saveApiSelections"
             />
           </div>
         </div>
@@ -236,14 +238,15 @@ const imagePreviewRef = ref(null);
  * 应用设置管理
  */
 const {
-  apiKeys,
-  modelProvider,
-  modelName,
+  apiSettings,
   settingsOpen,
-  loadApiKeys,
-  loadModelConfig,
+  settingsLoading,
+  settingsSaving,
+  settingsError,
+  loadApiSettings,
   toggleSettings,
-  saveSettings,
+  saveApiProfile,
+  saveApiSelections,
 } = useAppSettings({ bookshelfRef, chatService: ChatService });
 
 /**
@@ -305,43 +308,15 @@ const workspaceStyle = computed(() => ({
   '--chat-panel-width': `${chatPanelWidth.value}px`,
 }));
 
-// 检查是否有任何一个提供商配置了 API Key
-const hasAnyApiKey = computed(() => {
-  if (!apiKeys.value || typeof apiKeys.value !== 'object') {
-    return false;
-  }
-  return Object.values(apiKeys.value).some(key => key && key.trim());
-});
+const hasAnyApiKey = computed(() => apiSettings.value.profiles.some(profile => profile.hasKey));
 
 const chatScopeType = computed(() => (view.value === 'reader' ? 'book' : 'library'));
 const chatScopeKey = computed(() => (view.value === 'reader' ? currentBookPath.value : 'library'));
 
 onMounted(() => {
-  Promise.all([
-    loadApiKeys(),
-    loadModelConfig()
-  ]).then(([apiKeysValue]) => {
-    // API Keys 加载完成后，检查是否需要显示引导界面
-    // 使用 nextTick 确保 bookshelfRef 已经挂载
-    nextTick(() => {
-      if (bookshelfRef.value) {
-        const hasAnyKey = apiKeysValue && typeof apiKeysValue === 'object' 
-          ? Object.values(apiKeysValue).some(key => key && key.trim())
-          : false;
-        bookshelfRef.value.checkOnboarding(hasAnyKey ? 'has-key' : '');
-      }
-      
-      // 初始化 Toast 实例
-      if (toastRef.value) {
-        setToastInstance(toastRef.value);
-      }
-      
-      // 初始化图片预览实例
-      if (imagePreviewRef.value) {
-        setPreviewInstance(imagePreviewRef.value);
-      }
-    });
-  });
+  void loadApiSettings();
+  if (toastRef.value) setToastInstance(toastRef.value);
+  if (imagePreviewRef.value) setPreviewInstance(imagePreviewRef.value);
   window.addEventListener('resize', syncChatWidth);
 });
 

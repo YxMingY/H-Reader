@@ -187,6 +187,13 @@ export class Note {
              */
             this["quote"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["inlineConversationId"] = undefined;
+        }
         if (!("createdAt" in $$source)) {
             /**
              * @member

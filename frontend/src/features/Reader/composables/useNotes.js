@@ -66,16 +66,17 @@ export function useNotes(bookPath) {
   }
 
   async function editNote(note, isNew = false) {
-    if (editing.value?.note.id === note.id) return;
+    if (editing.value?.note.id === note.id) return true;
     const path = bookPath.value;
-    if (!path || !await flushNote() || path !== bookPath.value) return;
+    if (!path || !await flushNote() || path !== bookPath.value) return false;
     saveError.value = '';
     editing.value = { path, note, text: note.text, isNew };
+    return true;
   }
 
-  function addNote(anchor, quote = '') {
+  function addNote(anchor, quote = '', { text = '', inlineConversationId = '' } = {}) {
     const id = crypto.randomUUID?.() ?? Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
-    return editNote({ ...anchor, id, text: '', quote, createdAt: 0, updatedAt: 0 }, true);
+    return editNote({ ...anchor, id, text, quote, inlineConversationId, createdAt: 0, updatedAt: 0 }, true);
   }
 
   async function removeNote(note) {
@@ -96,6 +97,18 @@ export function useNotes(bookPath) {
     }
   }
 
+  async function detachInlineNoteLinks(id) {
+    const path = bookPath.value;
+    await loadPromise;
+    if (path !== bookPath.value) return;
+    notes.value = notes.value.map(note => note.inlineConversationId === id
+      ? { ...note, inlineConversationId: '' }
+      : note);
+    if (editing.value?.note.inlineConversationId === id) {
+      editing.value.note = { ...editing.value.note, inlineConversationId: '' };
+    }
+  }
+
   function saveOnOutsideClick(event) {
     if (editing.value && !event.target.closest?.('.pdf-note-editor')) void flushNote();
   }
@@ -103,5 +116,5 @@ export function useNotes(bookPath) {
   onMounted(() => document.addEventListener('pointerdown', saveOnOutsideClick, true));
   onBeforeUnmount(() => document.removeEventListener('pointerdown', saveOnOutsideClick, true));
 
-  return { notesByPage, editing, saving, saveError, loadError, addNote, editNote, removeNote, flushNote };
+  return { notesByPage, editing, saving, saveError, loadError, addNote, editNote, removeNote, flushNote, detachInlineNoteLinks };
 }

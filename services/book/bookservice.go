@@ -24,18 +24,10 @@ type BookService struct {
 }
 
 func (a *BookService) GetScanDir() string {
-	// 优先从 Config 中读取默认文件夹
-	cfg := config.GetConfig()
-	if cfg.DefaultFolder != "" {
-		return cfg.DefaultFolder
-	}
-
-	// 如果 Config 中没有设置，返回空字符串（触发引导界面）
-	// 不再使用默认路径，确保用户必须主动选择文件夹
 	if a.scanDir != "" {
 		return a.scanDir
 	}
-	return ""
+	return config.GetConfig().ReadDefaultFolder()
 }
 
 func (a *BookService) ChooseDir() (string, error) {
@@ -50,9 +42,7 @@ func (a *BookService) ChooseDir() (string, error) {
 	a.scanDir = path
 
 	// 将选择的文件夹保存到 Config
-	cfg := config.GetConfig()
-	cfg.DefaultFolder = path
-	if err := cfg.SaveToFile(); err != nil {
+	if err := config.GetConfig().SetDefaultFolder(path); err != nil {
 		// 保存失败不影响选择结果，只记录错误
 		println("保存默认文件夹失败:", err.Error())
 	}

@@ -6,6 +6,230 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as config$0 from "../config/models.js";
+
+export class APIProfileInput {
+    /**
+     * Creates a new APIProfileInput instance.
+     * @param {Partial<APIProfileInput>} [$$source = {}] - The source object to create the APIProfileInput.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("provider" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["provider"] = "";
+        }
+        if (!("baseUrl" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["baseUrl"] = "";
+        }
+        if (!("models" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["models"] = [];
+        }
+        if (!("apiKey" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["apiKey"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new APIProfileInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {APIProfileInput}
+     */
+    static createFrom($$source = {}) {
+        const $$createField4_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("models" in $$parsedSource) {
+            $$parsedSource["models"] = $$createField4_0($$parsedSource["models"]);
+        }
+        return new APIProfileInput(/** @type {Partial<APIProfileInput>} */($$parsedSource));
+    }
+}
+
+export class APIProfileView {
+    /**
+     * Creates a new APIProfileView instance.
+     * @param {Partial<APIProfileView>} [$$source = {}] - The source object to create the APIProfileView.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("provider" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["provider"] = "";
+        }
+        if (!("baseUrl" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["baseUrl"] = "";
+        }
+        if (!("models" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["models"] = [];
+        }
+        if (!("hasKey" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["hasKey"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new APIProfileView instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {APIProfileView}
+     */
+    static createFrom($$source = {}) {
+        const $$createField4_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("models" in $$parsedSource) {
+            $$parsedSource["models"] = $$createField4_0($$parsedSource["models"]);
+        }
+        return new APIProfileView(/** @type {Partial<APIProfileView>} */($$parsedSource));
+    }
+}
+
+export class APISelections {
+    /**
+     * Creates a new APISelections instance.
+     * @param {Partial<APISelections>} [$$source = {}] - The source object to create the APISelections.
+     */
+    constructor($$source = {}) {
+        if (!("sidebar" in $$source)) {
+            /**
+             * @member
+             * @type {config$0.APISelection}
+             */
+            this["sidebar"] = (new config$0.APISelection());
+        }
+        if (!("inline" in $$source)) {
+            /**
+             * @member
+             * @type {config$0.APISelection}
+             */
+            this["inline"] = (new config$0.APISelection());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new APISelections instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {APISelections}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType1;
+        const $$createField1_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("sidebar" in $$parsedSource) {
+            $$parsedSource["sidebar"] = $$createField0_0($$parsedSource["sidebar"]);
+        }
+        if ("inline" in $$parsedSource) {
+            $$parsedSource["inline"] = $$createField1_0($$parsedSource["inline"]);
+        }
+        return new APISelections(/** @type {Partial<APISelections>} */($$parsedSource));
+    }
+}
+
+export class APISettingsView {
+    /**
+     * Creates a new APISettingsView instance.
+     * @param {Partial<APISettingsView>} [$$source = {}] - The source object to create the APISettingsView.
+     */
+    constructor($$source = {}) {
+        if (!("profiles" in $$source)) {
+            /**
+             * @member
+             * @type {APIProfileView[]}
+             */
+            this["profiles"] = [];
+        }
+        if (!("selections" in $$source)) {
+            /**
+             * @member
+             * @type {APISelections}
+             */
+            this["selections"] = (new APISelections());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new APISettingsView instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {APISettingsView}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType3;
+        const $$createField1_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("profiles" in $$parsedSource) {
+            $$parsedSource["profiles"] = $$createField0_0($$parsedSource["profiles"]);
+        }
+        if ("selections" in $$parsedSource) {
+            $$parsedSource["selections"] = $$createField1_0($$parsedSource["selections"]);
+        }
+        return new APISettingsView(/** @type {Partial<APISettingsView>} */($$parsedSource));
+    }
+}
+
 /**
  * ChatMessageRecord 存储在会话中的单条消息记录
  * 
@@ -118,8 +342,8 @@ export class ChatSessionDetail {
      * @returns {ChatSessionDetail}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType1;
-        const $$createField1_0 = $$createType3;
+        const $$createField0_0 = $$createType5;
+        const $$createField1_0 = $$createType7;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("summary" in $$parsedSource) {
             $$parsedSource["summary"] = $$createField0_0($$parsedSource["summary"]);
@@ -231,8 +455,161 @@ export class ChatSessionSummary {
     }
 }
 
+export class InlineAnchor {
+    /**
+     * Creates a new InlineAnchor instance.
+     * @param {Partial<InlineAnchor>} [$$source = {}] - The source object to create the InlineAnchor.
+     */
+    constructor($$source = {}) {
+        if (!("pageNum" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["pageNum"] = 0;
+        }
+        if (!("x" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["x"] = 0;
+        }
+        if (!("y" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["y"] = 0;
+        }
+        if (!("quote" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["quote"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new InlineAnchor instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {InlineAnchor}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new InlineAnchor(/** @type {Partial<InlineAnchor>} */($$parsedSource));
+    }
+}
+
+export class InlineConversation {
+    /**
+     * Creates a new InlineConversation instance.
+     * @param {Partial<InlineConversation>} [$$source = {}] - The source object to create the InlineConversation.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("anchor" in $$source)) {
+            /**
+             * @member
+             * @type {InlineAnchor}
+             */
+            this["anchor"] = (new InlineAnchor());
+        }
+        if (!("messages" in $$source)) {
+            /**
+             * @member
+             * @type {ChatMessageRecord[]}
+             */
+            this["messages"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new InlineConversation instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {InlineConversation}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType8;
+        const $$createField2_0 = $$createType7;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("anchor" in $$parsedSource) {
+            $$parsedSource["anchor"] = $$createField1_0($$parsedSource["anchor"]);
+        }
+        if ("messages" in $$parsedSource) {
+            $$parsedSource["messages"] = $$createField2_0($$parsedSource["messages"]);
+        }
+        return new InlineConversation(/** @type {Partial<InlineConversation>} */($$parsedSource));
+    }
+}
+
+export class InlineConversationMarker {
+    /**
+     * Creates a new InlineConversationMarker instance.
+     * @param {Partial<InlineConversationMarker>} [$$source = {}] - The source object to create the InlineConversationMarker.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("pageNum" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["pageNum"] = 0;
+        }
+        if (!("x" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["x"] = 0;
+        }
+        if (!("y" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["y"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new InlineConversationMarker instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {InlineConversationMarker}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new InlineConversationMarker(/** @type {Partial<InlineConversationMarker>} */($$parsedSource));
+    }
+}
+
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
-const $$createType1 = ChatSessionSummary.createFrom;
-const $$createType2 = ChatMessageRecord.createFrom;
+const $$createType1 = config$0.APISelection.createFrom;
+const $$createType2 = APIProfileView.createFrom;
 const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = APISelections.createFrom;
+const $$createType5 = ChatSessionSummary.createFrom;
+const $$createType6 = ChatMessageRecord.createFrom;
+const $$createType7 = $Create.Array($$createType6);
+const $$createType8 = InlineAnchor.createFrom;

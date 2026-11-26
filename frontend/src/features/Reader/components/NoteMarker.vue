@@ -8,7 +8,7 @@ const props = defineProps({
   saving: Boolean,
   error: { type: String, default: '' },
 });
-const emit = defineEmits(['edit', 'update:draft', 'contextmenu']);
+const emit = defineEmits(['edit', 'update:draft', 'contextmenu', 'open-conversation']);
 
 const marker = ref(null);
 const popup = ref(null);
@@ -116,6 +116,13 @@ onBeforeUnmount(() => {
         <div v-if="error" class="note-error" role="alert">{{ error }}</div>
       </template>
       <button v-else type="button" class="note-content" @click="edit">{{ note.text || '空笔记' }}</button>
+      <button
+        v-if="note.inlineConversationId"
+        type="button"
+        class="note-conversation-link"
+        :disabled="saving"
+        @click="reading = false; emit('open-conversation', note)"
+      >查看原问答</button>
     </div>
   </Teleport>
 </template>
@@ -170,6 +177,16 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   cursor: text;
+}
+
+.note-conversation-link {
+  margin: 4px 6px 0;
+  padding: 4px 7px;
+  border: 1px solid #e6c66e;
+  border-radius: 5px;
+  background: #fff5d3;
+  color: #6b4915;
+  cursor: pointer;
 }
 
 .note-error {

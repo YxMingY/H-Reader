@@ -27,6 +27,7 @@ const props = defineProps({
     default: () => [], // 当前页的大头针列表
   },
   notes: { type: Array, default: () => [] },
+  inlineMarkers: { type: Array, default: () => [] },
   editingNote: { type: Object, default: null },
   savingNote: Boolean,
   noteSaveError: { type: String, default: '' },
@@ -41,7 +42,7 @@ const props = defineProps({
 });
 
 // 定义组件事件
-const emit = defineEmits(['pin-dblclick', 'pin-remove', 'note-edit', 'note-draft', 'note-contextmenu']);
+const emit = defineEmits(['pin-dblclick', 'pin-remove', 'note-edit', 'note-draft', 'note-contextmenu', 'open-inline-ask', 'inline-ask-contextmenu', 'open-note-conversation']);
 
 // DOM 元素引用
 const container = ref(null); // 页面容器元素
@@ -80,6 +81,18 @@ const getPinPosition = (annotation) => {
 
 // Both PDF markers use the same 12px icon size at a page width of 732px.
 const markerSize = computed(() => 12 * Math.max(0.5, Math.min(2, props.pageWidth / 732)));
+const inlineMarkerPositions = computed(() => {
+  const counts = new Map();
+  const keyFor = ({ x, y }) => `${x}:${y}`;
+  for (const note of props.notes) counts.set(keyFor(note), 1);
+
+  return props.inlineMarkers.map(marker => {
+    const key = keyFor(marker);
+    const offset = counts.get(key) ?? 0;
+    counts.set(key, offset + 1);
+    return { marker, offset };
+  });
+});
 
 /**
  * 处理大头针双击
@@ -127,7 +140,18 @@ const handlePinRemove = (annotationId) => {
       @edit="emit('note-edit', $event)"
       @update:draft="emit('note-draft', $event)"
       @contextmenu="(event, item) => emit('note-contextmenu', event, item)"
+      @open-conversation="emit('open-note-conversation', $event)"
     />
+    <button
+      v-for="{ marker, offset } in inlineMarkerPositions"
+      :key="marker.id"
+      type="button"
+      class="pdf-inline-marker pdf-page-marker"
+      :style="{ left: `${marker.x * 100}%`, top: `${marker.y * 100}%`, marginLeft: `${offset * markerSize * 1.4}px` }"
+      aria-label="打开原地问对话"
+      @click.stop="emit('open-inline-ask', 'inline-ask-contextmenu', marker)"
+      @contextmenu.prevent.stop="emit('inline-ask-contextmenu', $event, marker)"
+    ><span class="pdf-marker-icon" aria-hidden="true">💬</span></button>
   </div>
 </template>
 
@@ -160,6 +184,17 @@ const handlePinRemove = (annotationId) => {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
   user-select: none;
   opacity: 0.7;
+}
+
+.pdf-inline-marker {
+  position: absolute;
+  z-index: 102;
+  transform: translate(-50%, -50%);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
 
 .pdf-page-canvas {

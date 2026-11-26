@@ -1,203 +1,207 @@
-// Package chat - 配置管理
-//
-// config_manager.go 负责 API Key 和模型配置的管理。
 package chat
 
 import (
+	"crypto/rand"
+	"errors"
 	"fmt"
-	"hreader/llmkit"
+	"net/url"
+	"slices"
 	"strings"
+
+	"hreader/llmkit"
+	"hreader/services/config"
 )
 
-// ============================================================================
-// API Key 管理
-// ============================================================================
-
-// GetAPIKey 从缓存配置中读取指定提供商的 API 密钥
-//
-// 无需重新加载文件，直接使用内存中的单例缓存。
-// 如果配置未初始化或该提供商没有配置 key，返回空字符串。
-//
-// 参数：
-//   - provider: 提供商名称（aliyun, deepseek, glm）
-//
-// 返回：
-//   - 当前配置的 API_KEY
-func (c *ChatService) GetAPIKey(provider string) string {
-	if c.config == nil || c.config.APIKeys == nil {
-		return ""
-	}
-	return c.config.APIKeys[provider]
+type APIProfileInput struct {
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Provider string   `json:"provider"`
+	BaseURL  string   `json:"baseUrl"`
+	Models   []string `json:"models"`
+	APIKey   string   `json:"apiKey"`
 }
 
-// GetAllAPIKeys 获取所有提供商的 API Keys
-//
-// 返回：
-//   - map[string]string{provider: api_key}
-func (c *ChatService) GetAllAPIKeys() map[string]string {
-	if c.config == nil || c.config.APIKeys == nil {
-		return make(map[string]string)
-	}
-	// 返回副本，避免外部修改
-	keys := make(map[string]string)
-	for k, v := range c.config.APIKeys {
-		keys[k] = v
-	}
-	return keys
+type APIProfileView struct {
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Provider string   `json:"provider"`
+	BaseURL  string   `json:"baseUrl"`
+	Models   []string `json:"models"`
+	HasKey   bool     `json:"hasKey"`
 }
 
-// SaveAPIKey 保存指定提供商的 API 密钥到配置文件
-//
-// 流程：
-//  1. 验证新 API_KEY 是否有效（创建临时 client 测试连接）
-//  2. 保存到配置文件（同时更新内存缓存）
-//  3. 如果当前 provider 匹配，替换当前 client 对象
-//  4. 重置 conversation（会在下次 ensureConversationLocked 时重建）
-//
-// 参数：
-//   - provider: 提供商名称（aliyun, deepseek, glm）
-//   - apiKey: 新的 API 密钥
-//
-// 返回：
-//   - 错误信息（如果 API_KEY 无效或文件写入失败）
-//
-// 注意：
-//   - 如果 API_KEY 无效，保存失败且不会修改现有 client
-//   - 保存成功后，后续对话会自动使用新的 API_KEY
-func (c *ChatService) SaveAPIKey(provider string, apiKey string) error {
-	cleanKey := strings.TrimSpace(apiKey)
-	if cleanKey == "" {
-		return fmt.Errorf("api key cannot be empty")
-	}
+type APISelections struct {
+	Sidebar config.APISelection `json:"sidebar"`
+	Inline  config.APISelection `json:"inline"`
+}
 
-	if provider == "" {
-		return fmt.Errorf("provider cannot be empty")
+type APISettingsView struct {
+	Profiles   []APIProfileView `json:"profiles"`
+	Selections APISelections    `json:"selections"`
+}
+
+func (c *ChatService) GetAPISettings() APISettingsView {
+	return apiSettingsView(c.config.ReadAPISettings())
+}
+
+func (c *ChatService) SaveAPIProfile(input APIProfileInput) (APISettingsView, error) {
+	profile := config.APIProfile{
+		ID: input.ID, Name: strings.TrimSpace(input.Name), Provider: strings.TrimSpace(input.Provider),
+		APIKey: strings.TrimSpace(input.APIKey), Models: []string{},
+	}
+	if profile.Name == "" || profile.Provider == "" {
+		return APISettingsView{}, errors.New("请填写配置名称和供应商")
+	}
+	if profile.Provider == "custom" {
+		var err error
+		profile.BaseURL, err = customAPIBaseURL(input.BaseURL)
+		if err != nil {
+			return APISettingsView{}, err
+		}
+	}
+	for _, item := range input.Models {
+		model := strings.TrimSpace(item)
+		if model != "" && !slices.Contains(profile.Models, model) {
+			profile.Models = append(profile.Models, model)
+		}
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	// 先验证 API_KEY 是否有效（创建临时 client）
-	model := c.config.Model
-	if model == "" {
-		model = defaultModel
-	}
-
-	newClient, err := llmkit.NewClient(llmkit.Config{
-		Provider: llmkit.ProviderType(provider),
-		APIKey:   cleanKey,
-		Model:    model,
+	err := c.config.UpdateAPISettings(func(settings *config.APISettings) error {
+		index := slices.IndexFunc(settings.Profiles, func(old config.APIProfile) bool {
+			return old.ID == profile.ID
+		})
+		if profile.ID != "" && index < 0 {
+			return errors.New("此供应商配置已不存在，请重新打开设置")
+		}
+		sameEndpoint := index >= 0 && sameSupplier(settings.Profiles[index], profile)
+		if !sameEndpoint && slices.ContainsFunc(settings.Profiles, func(old config.APIProfile) bool {
+			return sameSupplier(old, profile)
+		}) {
+			return errors.New("此供应商已配置，请编辑现有配置的模型列表")
+		}
+		if profile.APIKey == "" && sameEndpoint {
+			profile.APIKey = settings.Profiles[index].APIKey
+		}
+		if profile.APIKey == "" {
+			return errors.New("请输入该供应商的 API Key")
+		}
+		if _, err := c.newClient(profileClientConfig(profile, "")); err != nil {
+			return fmt.Errorf("无法使用此供应商的 API 配置：%w", err)
+		}
+		if index < 0 {
+			profile.ID = rand.Text()
+			settings.Profiles = append(settings.Profiles, profile)
+		} else {
+			settings.Profiles[index] = profile
+			for _, selection := range []*config.APISelection{&settings.Sidebar, &settings.Inline} {
+				if selection.ProfileID == profile.ID && !slices.Contains(profile.Models, selection.Model) {
+					selection.Model = ""
+				}
+			}
+		}
+		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("invalid api key: %w", err)
+		return APISettingsView{}, err
 	}
-
-	// 确保 APIKeys map 已初始化
-	if c.config.APIKeys == nil {
-		c.config.APIKeys = make(map[string]string)
-	}
-
-	// 保存到配置文件（同时更新内存缓存）
-	previousKey, hadKey := c.config.APIKeys[provider]
-	c.config.APIKeys[provider] = cleanKey
-	if err := c.config.SaveToFile(); err != nil {
-		if hadKey {
-			c.config.APIKeys[provider] = previousKey
-		} else {
-			delete(c.config.APIKeys, provider)
-		}
-		return err
-	}
-
-	// 如果当前 provider 匹配，更新 client 并重置 conversation
-
-	if c.config.Provider == provider {
-		c.client = newClient
-		c.conversation = nil
-	}
-
-	return nil
+	return c.refreshAPISettingsLocked(), nil
 }
 
-// ============================================================================
-// 模型配置管理
-// ============================================================================
-
-// GetModelConfig 获取模型配置（提供商和具体模型）
-//
-// 返回：
-//   - map[string]string{"provider": 提供商, "model": 模型名称}
-//   - 如果配置未初始化，返回默认值（aliyun, qwen3.8-flash）
-func (c *ChatService) GetModelConfig() map[string]string {
-	if c.config == nil {
-		return map[string]string{
-			"provider": "aliyun",
-			"model":    defaultModel,
-		}
+func customAPIBaseURL(input string) (string, error) {
+	addr, err := url.Parse(strings.TrimSpace(input))
+	if err != nil || (addr.Scheme != "http" && addr.Scheme != "https") || addr.Hostname() == "" ||
+		addr.User != nil || addr.RawQuery != "" || addr.ForceQuery || addr.Fragment != "" {
+		return "", errors.New("请输入完整的 HTTP 或 HTTPS API 地址，API Key 请单独填写")
 	}
-
-	provider := c.config.Provider
-	if provider == "" {
-		provider = "aliyun"
-	}
-
-	model := c.config.Model
-	if model == "" {
-		model = defaultModel
-	}
-
-	return map[string]string{
-		"provider": provider,
-		"model":    model,
-	}
+	addr.Host = strings.ToLower(addr.Host)
+	base := strings.TrimRight(addr.String(), "/")
+	return strings.TrimSuffix(base, "/chat/completions"), nil
 }
 
-// SaveModelConfig 保存模型配置到配置文件
-//
-// 参数：
-//   - config: map[string]string{"provider": 提供商, "model": 模型名称}
-//
-// 流程：
-//  1. 更新内存中的配置
-//  2. 保存到文件
-//  3. 使用所选提供商的 API Key 更新 client
-//  4. 重置 conversation（下次对话时重建）
-//
-// 返回：
-//   - 错误信息（如果文件写入失败）
-//
-// 注意：
-//   - 更换模型后，现有会话的 LLMState 仍然有效
-//   - 新消息会使用新的模型生成回复
-func (c *ChatService) SaveModelConfig(config map[string]string) error {
+func sameSupplier(a, b config.APIProfile) bool {
+	return a.Provider == b.Provider && a.BaseURL == b.BaseURL
+}
+
+func (c *ChatService) SaveAPISelections(selections APISelections) (APISettingsView, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	provider := config["provider"]
-	model := config["model"]
-
-	var client *llmkit.Client
-	if apiKey := c.config.APIKeys[provider]; apiKey != "" {
-		var err error
-		client, err = llmkit.NewClient(llmkit.Config{
-			Provider: llmkit.ProviderType(provider),
-			APIKey:   apiKey,
-			Model:    model,
-		})
-		if err != nil {
-			return err
+	err := c.config.UpdateAPISettings(func(settings *config.APISettings) error {
+		for _, selection := range []config.APISelection{selections.Sidebar, selections.Inline} {
+			if selection.ProfileID == "" && selection.Model == "" {
+				continue
+			}
+			profile, ok := settings.Profile(selection.ProfileID)
+			if !ok || profile.APIKey == "" {
+				return errors.New("请先选择已设置 API Key 的供应商")
+			}
+			if selection.Model == "" {
+				continue
+			}
+			if !slices.Contains(profile.Models, selection.Model) {
+				return fmt.Errorf("模型已从「%s」移除，请重新选择", profile.Name)
+			}
+			if _, err := c.newClient(profileClientConfig(profile, selection.Model)); err != nil {
+				return fmt.Errorf("无法使用 API 配置「%s」：%w", profile.Name, err)
+			}
 		}
+		settings.Sidebar, settings.Inline = selections.Sidebar, selections.Inline
+		return nil
+	})
+	if err != nil {
+		return APISettingsView{}, err
 	}
+	return c.refreshAPISettingsLocked(), nil
+}
 
-	previousProvider, previousModel := c.config.Provider, c.config.Model
-	c.config.Provider, c.config.Model = provider, model
-	if err := c.config.SaveToFile(); err != nil {
-		c.config.Provider, c.config.Model = previousProvider, previousModel
-		return err
+func apiSettingsView(settings config.APISettings) APISettingsView {
+	view := APISettingsView{
+		Profiles:   make([]APIProfileView, 0, len(settings.Profiles)),
+		Selections: APISelections{Sidebar: settings.Sidebar, Inline: settings.Inline},
 	}
+	for _, profile := range settings.Profiles {
+		view.Profiles = append(view.Profiles, APIProfileView{
+			ID: profile.ID, Name: profile.Name, Provider: profile.Provider, BaseURL: profile.BaseURL,
+			Models: append([]string{}, profile.Models...), HasKey: profile.APIKey != "",
+		})
+	}
+	return view
+}
 
-	c.client = client
-	c.conversation = nil
+func (c *ChatService) refreshAPISettingsLocked() APISettingsView {
+	settings := c.config.ReadAPISettings()
+	c.applyAPISettingsLocked(settings)
+	return apiSettingsView(settings)
+}
 
-	return nil
+func (c *ChatService) applyAPISettingsLocked(settings config.APISettings) {
+	sidebar := c.resolveAPIRoute(settings, settings.Sidebar, c.sidebar)
+	if sidebar.client != c.sidebar.client {
+		c.conversation = nil
+	}
+	c.sidebar = sidebar
+	c.inline = c.resolveAPIRoute(settings, settings.Inline, c.inline)
+}
+
+func (c *ChatService) resolveAPIRoute(settings config.APISettings, selection config.APISelection, current apiRoute) apiRoute {
+	profile, ok := settings.Profile(selection.ProfileID)
+	if !ok || selection.Model == "" || !slices.Contains(profile.Models, selection.Model) {
+		return apiRoute{}
+	}
+	cfg := profileClientConfig(profile, selection.Model)
+	if current.id == profile.ID && current.config == cfg {
+		return current
+	}
+	client, err := c.newClient(cfg)
+	if err != nil {
+		return apiRoute{}
+	}
+	return apiRoute{id: profile.ID, config: cfg, client: client}
+}
+
+func profileClientConfig(profile config.APIProfile, model string) llmkit.Config {
+	return llmkit.Config{
+		Provider: llmkit.ProviderType(profile.Provider), APIKey: profile.APIKey, Model: model, BaseURL: profile.BaseURL,
+	}
 }

@@ -8,7 +8,14 @@ export {
 };
 
 export {
+    APIProfileInput,
+    APIProfileView,
+    APISelections,
+    APISettingsView,
     ChatMessageRecord,
     ChatSessionDetail,
-    ChatSessionSummary
+    ChatSessionSummary,
+    InlineAnchor,
+    InlineConversation,
+    InlineConversationMarker
 } from "./models.js";

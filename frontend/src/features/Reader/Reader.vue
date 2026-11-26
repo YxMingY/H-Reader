@@ -29,6 +29,8 @@ import {
 import PdfPageShell from './components/PdfPageShell.vue';
 import AnnotationPin from './components/AnnotationPin.vue';
 import SelectionActionMenu from './components/SelectionActionMenu.vue';
+import InlineAskPopup from './components/InlineAskPopup.vue';
+import { useInlineAsk } from './composables/useInlineAsk';
 import { useNotes } from './composables/useNotes';
 
 // 定义组件属性
@@ -39,7 +41,7 @@ const props = defineProps({
 });
 
 // 定义组件事件
-const emit = defineEmits(['loaded', 'pagechange', 'navigate-to-message', 'ask-in-place']);
+const emit = defineEmits(['loaded', 'pagechange', 'navigate-to-message']);
 
 // DOM 元素引用
 const readerContainer = ref(null); // 阅读器容器元素
@@ -100,8 +102,34 @@ const { captureCurrentPage, startAreaSelection } = useScreenshot(currentPage, pa
  * - 通过 watch 监听 props 变化并同步更新
  */
 const bookPathRef = ref(props.bookPath || '');
-const { notesByPage, editing, saving, saveError, loadError, addNote, editNote, removeNote, flushNote } = useNotes(bookPathRef);
+const { notesByPage, editing, saving, saveError, loadError, addNote, editNote, removeNote, flushNote, detachInlineNoteLinks } = useNotes(bookPathRef);
 const noteMenu = ref(null);
+const deletingInlineIds = new Set();
+const {
+  active: inlineAsk,
+  markersByPage: inlineMarkersByPage,
+  loadError: inlineLoadError,
+  openNew: openInlineAsk,
+  openSaved: openSavedInlineAsk,
+  close: closeInlineAsk,
+  send: sendInlineQuestion,
+  load: loadInlineConversation,
+  remove: removeInlineConversation,
+} = useInlineAsk(bookPathRef);
+
+async function saveInlineAnswerAsNote(text) {
+  const conversation = inlineAsk.value;
+  if (!conversation?.id || deletingInlineIds.has(conversation.id)) return;
+  const { pageNum, x, y, quote } = conversation.anchor;
+  const opened = await addNote({ pageNum, x, y }, quote, { text, inlineConversationId: conversation.id });
+  if (opened && inlineAsk.value === conversation) closeInlineAsk();
+}
+
+async function openNoteConversation(note) {
+  if (!await flushNote()) return;
+  const { inlineConversationId: id, pageNum, x, y } = note;
+  openSavedInlineAsk({ id, pageNum, x, y });
+}
 
 function noteAnchor(point) {
   if (!bookPathRef.value || !point) return null;
@@ -133,7 +161,7 @@ function pageActions(anchor, text, close) {
       id: 'ask-in-place',
       label: '原地问',
       run: () => {
-        emit('ask-in-place', { ...anchor, text });
+        openInlineAsk(anchor, text);
         close();
       },
     },
@@ -147,6 +175,28 @@ function handleNoteContextMenu(event, note) {
     run: async () => {
       await removeNote(note);
       noteMenu.value = null;
+    },
+  }]);
+}
+
+function handleInlineAskContextMenu(event, marker) {
+  openNoteMenu(event, [{
+    id: 'delete-inline-ask',
+    label: '删除原地问',
+    run: async () => {
+      const { id } = marker;
+      const menu = noteMenu.value;
+      const path = bookPathRef.value;
+      if (deletingInlineIds.has(id)) return;
+      deletingInlineIds.add(id);
+      try {
+        if (!await flushNote()) throw new Error(saveError.value || '请先保存正在编辑的笔记');
+        if (path !== bookPathRef.value) return;
+        if (await removeInlineConversation(marker)) await detachInlineNoteLinks(id);
+        if (noteMenu.value === menu) noteMenu.value = null;
+      } finally {
+        deletingInlineIds.delete(id);
+      }
     },
   }]);
 }
@@ -580,6 +630,7 @@ defineExpose({
     </div>
     
     <div v-if="loadError" class="note-load-error" role="alert">{{ loadError }}</div>
+    <div v-if="inlineLoadError" class="note-load-error" role="alert">{{ inlineLoadError }}</div>
     <div class="pdf-canvas-container" ref="pdfCanvas">
       <PdfPageShell
         v-for="pageNum in totalPages"
@@ -588,6 +639,7 @@ defineExpose({
         :register="RegisterPageRefs"
         :annotations="getPageAnnotations(pageNum)"
         :notes="notesByPage.get(pageNum)"
+        :inline-markers="inlineMarkersByPage.get(pageNum)"
         :editing-note="editing"
         :saving-note="saving"
         :note-save-error="saveError"
@@ -598,6 +650,9 @@ defineExpose({
         @note-edit="editNote"
         @note-draft="updateNoteDraft"
         @note-contextmenu="handleNoteContextMenu"
+        @open-inline-ask="openSavedInlineAsk"
+        @inline-ask-contextmenu="handleInlineAskContextMenu"
+        @open-note-conversation="openNoteConversation"
       />
     </div>
     
@@ -616,6 +671,17 @@ defineExpose({
       :actions="noteMenu.actions"
       :position="noteMenu.position"
       @close="noteMenu = null"
+    />
+    <InlineAskPopup
+      v-if="inlineAsk"
+      :key="inlineAsk.key"
+      :conversation="inlineAsk"
+      :page-canvas="pageCanvasRefs[inlineAsk.anchor.pageNum]"
+      @close="closeInlineAsk"
+      @send="sendInlineQuestion(inlineAsk)"
+      @retry="loadInlineConversation(inlineAsk)"
+      @update:question="inlineAsk.question = $event"
+      @save-note="saveInlineAnswerAsNote"
     />
   </div>
 </template>

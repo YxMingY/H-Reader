@@ -320,11 +320,11 @@ func (c *ChatService) RollbackSessionMessages(scopeType, bookPath, sessionID str
 //   - 每个会话都有独立的 conversation 对象，互不影响
 //   - 使用与全局会话相同的上下文预算。
 func (c *ChatService) newSessionConversation(llmStateJSON string) (*llmkit.TracedConversation, error) {
-	if c.client == nil {
-		return nil, fmt.Errorf("client not initialized; call SaveAPIKey first")
+	if c.sidebar.client == nil {
+		return nil, fmt.Errorf("请先在设置中为右侧栏对话选择供应商和模型")
 	}
 
-	conv := c.client.NewTracedConversation(nil)
+	conv := c.sidebar.client.NewTracedConversation(nil)
 
 	// 如果有保存的状态，恢复到 conversation 中
 	if strings.TrimSpace(llmStateJSON) != "" {

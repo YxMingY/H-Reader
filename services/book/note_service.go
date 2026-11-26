@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -15,14 +16,15 @@ import (
 const notesVersion = 1
 
 type Note struct {
-	ID        string  `json:"id"`
-	PageNum   int     `json:"pageNum"`
-	X         float64 `json:"x"`
-	Y         float64 `json:"y"`
-	Text      string  `json:"text"`
-	Quote     string  `json:"quote,omitempty"`
-	CreatedAt int64   `json:"createdAt"`
-	UpdatedAt int64   `json:"updatedAt"`
+	ID                   string  `json:"id"`
+	PageNum              int     `json:"pageNum"`
+	X                    float64 `json:"x"`
+	Y                    float64 `json:"y"`
+	Text                 string  `json:"text"`
+	Quote                string  `json:"quote,omitempty"`
+	InlineConversationID string  `json:"inlineConversationId,omitempty"`
+	CreatedAt            int64   `json:"createdAt"`
+	UpdatedAt            int64   `json:"updatedAt"`
 }
 
 type notesFile struct {
@@ -103,6 +105,7 @@ func (s *NoteService) SaveNote(bookPath string, note Note) (Note, error) {
 	for i, existing := range notes {
 		if existing.ID == note.ID {
 			note.CreatedAt = existing.CreatedAt
+			note.InlineConversationID = existing.InlineConversationID
 			notes[i] = note
 			return note, writeNotes(path, notes)
 		}
@@ -133,6 +136,41 @@ func (s *NoteService) RemoveNote(bookPath, id string) error {
 		if note.ID == id {
 			return writeNotes(path, append(notes[:i], notes[i+1:]...))
 		}
+	}
+	return nil
+}
+
+// RemoveInlineConversationLinks keeps notes and their anchors while coordinating
+// removal of their source conversation with other note writes.
+func RemoveInlineConversationLinks(s *NoteService, bookPath, id string, removeConversation func() error) error {
+	path, err := notesPath(bookPath)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	notes, err := readNotes(path)
+	if err != nil {
+		return fmt.Errorf("读取关联笔记失败：%w", err)
+	}
+	if !slices.ContainsFunc(notes, func(note Note) bool { return note.InlineConversationID == id }) {
+		return removeConversation()
+	}
+
+	detached := slices.Clone(notes)
+	for i, note := range detached {
+		if note.InlineConversationID == id {
+			detached[i].InlineConversationID = ""
+		}
+	}
+	if err := writeNotes(path, detached); err != nil {
+		return fmt.Errorf("解除笔记关联失败：%w", err)
+	}
+	if err := removeConversation(); err != nil {
+		if restoreErr := writeNotes(path, notes); restoreErr != nil {
+			return errors.Join(err, fmt.Errorf("恢复笔记关联失败：%w", restoreErr))
+		}
+		return err
 	}
 	return nil
 }

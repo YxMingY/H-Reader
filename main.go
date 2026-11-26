@@ -25,6 +25,7 @@ func init() {
 func main() {
 	// 初始化阅读进度存储
 	book.InitProgressStore()
+	notes := &book.NoteService{}
 
 	wailApp := application.New(application.Options{
 		Name:        "hreader",
@@ -33,8 +34,8 @@ func main() {
 			application.NewService(&GreetService{}),
 			application.NewService(&book.BookService{}),
 			application.NewService(&book.AnnotationService{}),
-			application.NewService(&book.NoteService{}),
-			application.NewService(chat.NewChatService()),
+			application.NewService(notes),
+			application.NewService(chat.NewChatService(notes)),
 			application.NewService(&dictionary.DictionaryService{}),
 		},
 		Assets: application.AssetOptions{

@@ -5,7 +5,6 @@
 package chat
 
 import (
-	"hreader/llmkit"
 	"time"
 )
 
@@ -17,10 +16,6 @@ const (
 	// 存储格式版本，用于前向/后向兼容性
 	chatStoreSchemaVersion = 1
 
-	// LLM 提供商默认值（阿里云）
-	defaultProvider = llmkit.ProviderAliyun
-	// 默认使用的模型标识
-	defaultModel = "qwen3.8-flash"
 	// 单次 API 调用超时时间（120秒）
 	chatTimeout = 120 * time.Second
 )

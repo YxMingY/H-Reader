@@ -150,19 +150,18 @@ func (c *ChatService) ResetConversation() {
 // 必须在持有 mutex 的情况下调用（由调用者负责加锁）。
 //
 // 前提条件：
-//   - client 已由 SaveAPIKey 验证并初始化
+//   - 已为右侧栏对话选择供应商和模型
 //
 // 行为：
 //   - 如果 conversation 已存在，直接复用
 //   - 如果 conversation 为 nil，从现有 client 创建新的 conversation 对象
-//   - 设置 maxHistory=8（最多保留 8 轮对话历史）
 //   - 设置 maxTokens=4096（提高最大输出 token 限制）
 //
 // 返回：
 //   - 错误信息（如果 client 未初始化）
 func (c *ChatService) ensureConversationLocked() error {
-	if c.client == nil {
-		return fmt.Errorf("client not initialized; call SaveAPIKey first")
+	if c.sidebar.client == nil {
+		return fmt.Errorf("请先在设置中为右侧栏对话选择供应商和模型")
 	}
 
 	// 如果 conversation 已存在，直接复用
@@ -171,7 +170,7 @@ func (c *ChatService) ensureConversationLocked() error {
 	}
 
 	// 从 client 创建新的 conversation
-	conversation := c.client.NewTracedConversation(nil)
+	conversation := c.sidebar.client.NewTracedConversation(nil)
 	configureConversationBudget(conversation)
 	c.conversation = conversation
 
