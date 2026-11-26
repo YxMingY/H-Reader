@@ -4,14 +4,14 @@
 
 H-Reader 是一款面向论文、教材和技术文档的桌面 PDF 阅读器，提供 macOS、Windows 和 Linux 构建任务。
 
-## 下载 v1.0.0-beta.1
+## 下载 v1.0.0-beta.20261126.1
 
-预发行版下载：[Gitee Release](https://gitee.com/xming-kaede/hreader/releases/tag/v1.0.0-beta.1) · [GitHub Release](https://github.com/YxMingY/H-Reader/releases/tag/v1.0.0-beta.1)
+预发行版下载：[Gitee Release](https://gitee.com/xming-kaede/hreader/releases/tag/v1.0.0-beta.20261126.1) · [GitHub Release](https://github.com/YxMingY/H-Reader/releases/tag/v1.0.0-beta.20261126.1)
 
 | 平台 | 下载附件 |
 | --- | --- |
-| macOS Apple Silicon | `HReader-v1.0.0-beta.1-macos-arm64.zip`，解压后打开应用 |
-| Windows x64 | `HReader-v1.0.0-beta.1-windows-amd64.exe`，便携版，下载后直接运行 |
+| macOS Apple Silicon | `HReader-v1.0.0-beta.20261126.1-macos-arm64.zip`，解压后打开应用 |
+| Windows x64 | `HReader-v1.0.0-beta.20261126.1-windows-amd64.exe`，便携版，下载后直接运行 |
 
 两个发布页均提供 `SHA256SUMS.txt` 供校验。
 
