@@ -1,0 +1,7 @@
+# Wails v3.0.0 appends .0 to this version when generating the MSIX manifest.
+info:
+  companyName: "xMing Kaede"
+  productName: "HReader"
+  productIdentifier: "site.kaede.hreader"
+  description: "A modern e-reader application"
+  version: "1.0.1"

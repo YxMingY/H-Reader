@@ -14,7 +14,7 @@
     !define INFO_PRODUCTNAME "HReader"
 !endif
 !ifndef INFO_PRODUCTVERSION
-    !define INFO_PRODUCTVERSION "1.0.0-alpha.5"
+    !define INFO_PRODUCTVERSION "1.0.0-beta.1"
 !endif
 !ifndef INFO_COPYRIGHT
     !define INFO_COPYRIGHT "(c) 2025, xMing Kaede"
