@@ -166,6 +166,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { System } from '@wailsio/runtime';
 
 import Bookshelf from './features/Bookshelf/Bookshelf.vue';
 import Reader from './features/Reader/Reader.vue';
@@ -287,9 +288,16 @@ const {
   chatOpen,
   readerRef,
   addImageToChat: async (imageDataUrl) => {
-    if (chatPanelRef.value && typeof chatPanelRef.value.addAttachmentFromDataUrl === 'function') {
-      await chatPanelRef.value.addAttachmentFromDataUrl(imageDataUrl, 'screenshot.png');
+    if (!chatPanelRef.value) throw new Error('聊天面板尚未就绪，请重试。');
+    await chatPanelRef.value.addScreenshotToDraft(imageDataUrl);
+  },
+  copyImage: async (imageDataUrl) => {
+    if (System.IsMac()) {
+      await BookService.CopyScreenshotPNG(imageDataUrl);
+      return;
     }
+    const png = await (await fetch(imageDataUrl)).blob();
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
   },
 });
 

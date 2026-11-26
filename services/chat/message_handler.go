@@ -5,7 +5,9 @@ package chat
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"hreader/llmkit"
 	"strings"
 	"time"
 
@@ -154,7 +156,7 @@ func (c *ChatService) SendMessageStreamInSession(scopeType, bookPath, sessionID,
 		}
 
 		conv.AddText(text)
-		ctx, cancel := context.WithTimeout(context.Background(), chatTimeout)
+		ctx, cancel := llmkit.WithStreamTimeouts(context.Background(), streamFirstTimeout, streamIdleTimeout, streamTotalTimeout)
 		defer cancel()
 
 		// 流式回调：每收到一个文本块就发送给前端
@@ -169,7 +171,7 @@ func (c *ChatService) SendMessageStreamInSession(scopeType, bookPath, sessionID,
 		}
 
 		if err := conv.SendStream(ctx, cb); err != nil {
-			_ = application.Get().Event.Emit("chat_stream_error", err.Error())
+			_ = application.Get().Event.Emit("chat_stream_error", streamErrorMessage(ctx, err))
 			return
 		}
 
@@ -213,4 +215,11 @@ func (c *ChatService) SendMessageStreamInSession(scopeType, bookPath, sessionID,
 	}()
 
 	return nil
+}
+
+func streamErrorMessage(ctx context.Context, err error) string {
+	if cause := context.Cause(ctx); errors.Is(cause, context.DeadlineExceeded) {
+		return cause.Error()
+	}
+	return err.Error()
 }

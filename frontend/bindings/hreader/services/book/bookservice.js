@@ -23,6 +23,14 @@ export function ChooseDir() {
 }
 
 /**
+ * @param {string} dataURL
+ * @returns {$CancellablePromise<void>}
+ */
+export function CopyScreenshotPNG(dataURL) {
+    return $Call.ByID(343420551, dataURL);
+}
+
+/**
  * GetReadingProgress: 获取阅读进度（对外 API）
  * 
  * 工作流程：

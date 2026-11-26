@@ -18,6 +18,10 @@ const (
 
 	// 单次 API 调用超时时间（120秒）
 	chatTimeout = 120 * time.Second
+
+	streamFirstTimeout = 3 * time.Minute
+	streamIdleTimeout  = 90 * time.Second
+	streamTotalTimeout = 10 * time.Minute
 )
 
 // ============================================================================

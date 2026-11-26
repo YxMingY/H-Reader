@@ -320,19 +320,10 @@ export function useChatInput(sending, errorMessage) {
    * @returns {Promise<void>}
    */
   const addAttachmentFromDataUrl = async (dataUrl) => {
-    try {
-      // 将 data URL 转换为 Blob，再转换为 File 对象
-      const response = await fetch(dataUrl);
-      const blob = await response.blob();
-      const fileName = `screenshot-${Date.now()}.png`;
-      const file = new File([blob], fileName, { type: blob.type });
-      
-      // 读取为双格式并添加到附件列表
-      const item = await readFileAsDualFormat(file);
-      attachments.value.push(item);
-    } catch (err) {
-      errorMessage.value = `添加截图失败：${err?.message || err}`;
-    }
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    const file = new File([blob], `screenshot-${Date.now()}.png`, { type: blob.type });
+    attachments.value.push(await readFileAsDualFormat(file));
   };
 
   // ========================================

@@ -7,6 +7,7 @@ package chat
 import (
 	"context"
 	"fmt"
+	"hreader/llmkit"
 	"strings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -89,7 +90,7 @@ func (c *ChatService) SendMessageStream(message string) error {
 		c.mu.Unlock()
 
 		var full string
-		ctx, cancel := context.WithTimeout(context.Background(), chatTimeout)
+		ctx, cancel := llmkit.WithStreamTimeouts(context.Background(), streamFirstTimeout, streamIdleTimeout, streamTotalTimeout)
 		defer cancel()
 
 		callback := func(chunk string) error {
@@ -101,7 +102,7 @@ func (c *ChatService) SendMessageStream(message string) error {
 		}
 
 		if err := conv.SendStream(ctx, callback); err != nil {
-			_ = application.Get().Event.Emit("chat_stream_error", err.Error())
+			_ = application.Get().Event.Emit("chat_stream_error", streamErrorMessage(ctx, err))
 			return
 		}
 

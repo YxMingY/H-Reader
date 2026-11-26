@@ -393,17 +393,22 @@ const applyPdfSelection = async (content, { sendImmediately = false, trailingNew
   inputAreaRef.value?.focusAtEnd();
 };
 
-/**
- * 暴露给父组件的方法
- * 
- * 可通过 ref 访问：
- * const chatPanelRef = ref(null);
- * chatPanelRef.value?.addAttachmentFromDataUrl(dataUrl, fileName);
- */
+let screenshotSession;
+const addScreenshotToDraft = async (dataUrl) => {
+  const scope = scopeKey.value;
+  if (!activeSessionId.value) {
+    screenshotSession ??= createSessionAndEnter().finally(() => { screenshotSession = null; });
+    await screenshotSession;
+    if (scope !== scopeKey.value || !activeSessionId.value) {
+      throw new Error(errorMessage.value || '聊天会话尚未就绪，请重试。');
+    }
+  }
+  await addAttachmentFromDataUrl(dataUrl);
+};
+
 defineExpose({
   applyPdfSelection,
-  /** 从 Data URL 添加附件（用于截图等功能） */
-  addAttachmentFromDataUrl,
+  addScreenshotToDraft,
   /** 切换到指定会话（不自动滚动） */
   loadSession,
   /** 切换到指定会话并自动滚动到底部 */

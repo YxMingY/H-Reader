@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -341,15 +343,19 @@ func (conv *Conversation) SendStream(ctx context.Context, callback StreamCallbac
 	}
 	defer stream.Close()
 
+	activity, _ := ctx.Value(streamActivityKey{}).(func())
 	var fullResponse string
 	for {
 		resp, err := stream.Recv()
 		if err != nil {
-			if err.Error() == "EOF" {
+			if errors.Is(err, io.EOF) && ctx.Err() == nil {
 				break
 			}
 			conv.History = conv.History[:len(conv.History)-1]
 			return err
+		}
+		if activity != nil {
+			activity()
 		}
 		if len(resp.Choices) > 0 {
 			content := resp.Choices[0].Delta.Content
