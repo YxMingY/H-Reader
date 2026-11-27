@@ -130,7 +130,7 @@ onBeforeUnmount(() => {
           :readonly="pending"
         />
         <div class="selection-actions">
-          <button type="submit" :disabled="pending || !inputValue.trim()">插入聊天</button>
+          <button type="submit" :disabled="pending || !inputValue.trim()">发送</button>
           <button type="button" :disabled="pending" @click="cancelInput">取消</button>
         </div>
       </form>

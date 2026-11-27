@@ -376,12 +376,10 @@ watch(
 // 公开 API
 // ========================================
 
-const applyPdfSelection = async (content, { sendImmediately = false, trailingNewline = true } = {}) => {
+const applyPdfSelection = async (content, { sendImmediately = false, trailingNewline = true, onSaved } = {}) => {
   if (sendImmediately) {
     if (sending.value) throw new Error('正在生成回复，请稍后重试。');
-    draft.value = content;
-    await sendMessage({ includeAttachments: false });
-    return;
+    return sendMessage({ content, includeAttachments: false, onSaved });
   }
 
   if (!activeSessionId.value) {

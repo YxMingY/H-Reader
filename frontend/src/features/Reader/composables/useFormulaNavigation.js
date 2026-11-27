@@ -29,6 +29,7 @@ export function useFormulaNavigation({
   const selectedFormula = ref(null);
   const selectedText = ref('');
   const selectionPoint = ref(null);
+  const selectionTopLeft = ref(null);
   const selectedIsFormulaNumber = ref(false);
   const selectionActionPending = ref(false);
   const selectionInputActive = ref(false);
@@ -171,6 +172,7 @@ export function useFormulaNavigation({
         ?? normalized.match(/^(\d+(?:\.\d+)*)$/)?.[1];
       const formula = formulaMap.value.get(formulaNumber);
       const rect = range.getBoundingClientRect();
+      selectionTopLeft.value = { x: rect.left, y: rect.top };
       const focusRange = range.cloneRange();
       focusRange.collapse(selection.focusNode === range.startContainer && selection.focusOffset === range.startOffset);
       const focusRect = focusRange.getBoundingClientRect();
@@ -316,6 +318,7 @@ export function useFormulaNavigation({
     selectedFormula,
     selectedText,
     selectionPoint,
+    selectionTopLeft,
     selectedIsFormulaNumber,
     selectionActionPending,
     selectionInputActive,

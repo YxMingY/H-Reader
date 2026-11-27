@@ -390,10 +390,10 @@ const scrollToMessage = (messageIndex) => {
     }
     
     // 计算滚动位置，将消息滚动到视口中间
-    const elementTop = targetElement.offsetTop;
-    const elementHeight = targetElement.offsetHeight;
-    const viewportHeight = viewport.clientHeight;
-    const scrollTop = elementTop - (viewportHeight / 2) + (elementHeight / 2);
+    const target = targetElement.getBoundingClientRect();
+    const viewportTop = viewport.getBoundingClientRect().top + viewport.clientTop;
+    const inset = Math.max(0, (viewport.clientHeight - target.height) / 2);
+    const scrollTop = viewport.scrollTop + target.top - viewportTop - inset;
     
     // 直接滚动（不使用平滑效果）
     viewport.scrollTo({

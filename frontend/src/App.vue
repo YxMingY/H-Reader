@@ -275,7 +275,7 @@ const insertSelectionIntoChat = async (content, options) => {
   if (!chatOpen.value) toggleChatPanel();
   await nextTick();
   if (!chatPanelRef.value) throw new Error('聊天面板尚未就绪，请重试。');
-  await chatPanelRef.value.applyPdfSelection(content, options);
+  return chatPanelRef.value.applyPdfSelection(content, options);
 };
 
 const addScreenshotToChat = async (imageDataUrl) => {

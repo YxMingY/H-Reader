@@ -45,9 +45,10 @@ export function useAnnotations(bookPathRef, currentPage, emitNavigateToMessage) 
      * @param {number} pageWidth - 当前页面宽度（用于归一化）
      * @param {number} pageHeight - 当前页面高度（用于归一化）
      * @param {string} messagePreview - 消息内容预览（可选）
+     * @param {string} bookPath - 异步保存使用的原始书籍路径（可选）
      */
-    const addAnnotation = async (pageNum, x, y, sessionId, messageIndex, pageWidth, pageHeight, messagePreview = '') => {
-        if (!bookPathRef.value) {
+    const addAnnotation = async (pageNum, x, y, sessionId, messageIndex, pageWidth, pageHeight, messagePreview = '', bookPath = bookPathRef.value) => {
+        if (!bookPath) {
             console.warn('无法添加大头针：bookPath 为空');
             return;
         }
@@ -68,8 +69,8 @@ export function useAnnotations(bookPathRef, currentPage, emitNavigateToMessage) 
         };
 
         try {
-            await AnnotationService.AddAnnotation(bookPathRef.value, annotation);
-            annotations.value.push(annotation);
+            await AnnotationService.AddAnnotation(bookPath, annotation);
+            if (bookPath === bookPathRef.value) annotations.value.push(annotation);
             console.log('大头针添加成功:', annotation.id);
             return annotation;
         } catch (err) {

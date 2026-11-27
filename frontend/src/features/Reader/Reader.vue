@@ -248,6 +248,7 @@ const {
   selectedFormula,
   selectedText,
   selectionPoint,
+  selectionTopLeft,
   selectedIsFormulaNumber,
   selectionActionPending,
   selectionInputActive,
@@ -306,13 +307,21 @@ const selectionActions = computed(() => {
       selectionActionPending.value = false;
     }
   };
+  const pinAnchor = noteAnchor(selectionTopLeft.value);
+  const bookPath = bookPathRef.value;
+  const sendSelection = (content) => useSelection(content, {
+    sendImmediately: true,
+    onSaved: pinAnchor ? ({ sessionId, messageIndex, content }) => addAnnotation(
+      pinAnchor.pageNum, pinAnchor.x, pinAnchor.y, sessionId, messageIndex, 1, 1, content, bookPath,
+    ) : undefined,
+  });
   return [
     { id: 'chat', label: '插入聊天', run: () => useSelection(text) },
     {
       id: 'ask',
       label: '提问',
       inputPlaceholder: '输入你的问题',
-      run: (question) => useSelection(`${question}：\n${text}`, { trailingNewline: false }),
+      run: (question) => sendSelection(`${question}：\n${text}`),
     },
     {
       id: 'explain',
@@ -323,7 +332,7 @@ const selectionActions = computed(() => {
           Boolean(dictionaryEntry.value) ||
           (/[\r\n\u2028]/.test(word) && Boolean(await DictionaryService.Lookup(text).catch(() => null)));
         const prompt = isWord ? '解释这个词' : '解释以下内容';
-        await useSelection(`${prompt}：\n${text}`, { sendImmediately: true });
+        await sendSelection(`${prompt}：\n${text}`);
       },
     },
     ...availablePageActions,

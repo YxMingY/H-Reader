@@ -43,6 +43,7 @@ export function useChatStream(activeSessionId, sending, messages, errorMessage, 
   
   /** 当前流式响应的 assistant 消息索引：用于追加内容 */
   const streamAssistantIndex = ref(-1);
+  let savedSelection;
 
   /** 事件取消订阅函数列表：用于组件卸载时清理 */
   const eventUnsubscribers = [];
@@ -80,6 +81,7 @@ export function useChatStream(activeSessionId, sending, messages, errorMessage, 
 const resetStreamingState = () => {
   streamSessionId.value = '';
   streamAssistantIndex.value = -1;
+  savedSelection = undefined;
   sending.value = false;
 };
 
@@ -105,11 +107,13 @@ const resetStreamingState = () => {
  * - API 调用可能立即失败（如 API key 未配置）
  * - 也可能在后台异步失败（通过网络事件监听器捕获）
  */
-const sendMessage = async ({ includeAttachments = true } = {}) => {
+const sendMessage = async ({ content, includeAttachments = true, onSaved } = {}) => {
   if (sending.value) return;
 
   // 步骤 1: 验证输入
-  let text = draft.value.trim();
+  let text = (content ?? draft.value).trim();
+  const scopeType = props.scopeType;
+  const bookPath = scopeType === 'book' ? props.bookPath : '';
   const outgoingAttachments = includeAttachments ? attachments.value : [];
   
   // 如果只有图片没有文字，自动添加默认提示
@@ -135,6 +139,10 @@ const sendMessage = async ({ includeAttachments = true } = {}) => {
       activeSessionId.value = sessionId;
     }
 
+    if (scopeType !== props.scopeType || (scopeType === 'book' && bookPath !== props.bookPath)) {
+      throw new Error('发送前书籍已切换，请重试。');
+    }
+
     // 步骤 4: 乐观更新 - 创建占位消息
     const localNow = new Date().toISOString();
     
@@ -155,9 +163,10 @@ const sendMessage = async ({ includeAttachments = true } = {}) => {
     // 步骤 5: 设置流式追踪状态
     streamSessionId.value = sessionId;
     streamAssistantIndex.value = messages.value.length - 1;
+    if (onSaved) savedSelection = { scopeType, bookPath, onSaved };
 
     // 步骤 6: 清理输入
-    draft.value = '';
+    if (content === undefined) draft.value = '';
     if (includeAttachments) attachments.value = [];
     
     // 步骤 7: 滚动到底部
@@ -166,8 +175,8 @@ const sendMessage = async ({ includeAttachments = true } = {}) => {
     // 步骤 8: 调用后端流式 API - 发送压缩后的图片
     // 接口仅启动后台任务，发送状态由流式完成或错误事件清除。
     await ChatService.SendMessageStreamInSession(
-      props.scopeType,
-      props.scopeType === 'book' ? props.bookPath : '',
+      scopeType,
+      bookPath,
       sessionId,
       text,
       pendingImages
@@ -194,6 +203,7 @@ const sendMessage = async ({ includeAttachments = true } = {}) => {
     const errorMsg = err?.message || String(err) || '发送失败';
     errorMessage.value = `发送失败：${errorMsg}`;
     console.error('sendMessage error:', err);
+    if (content !== undefined) throw err;
   }
 };
 
@@ -256,12 +266,27 @@ const onStreamDone = async (event) => {
   }
 
   const doneSessionId = streamSessionId.value;
+  const selection = savedSelection;
+  let annotationError;
+  if (selection) {
+    try {
+      // Resolve the index from saved history, which does not include optimistic rows.
+      const detail = await ChatService.LoadSession(selection.scopeType, selection.bookPath, doneSessionId);
+      const messageIndex = detail.messages.length - 2;
+      const message = detail.messages[messageIndex];
+      if (message?.role !== 'user') throw new Error('无法定位已保存的用户消息');
+      await selection.onSaved({ sessionId: doneSessionId, messageIndex, content: message.content });
+    } catch (error) {
+      annotationError = `添加选区大头针失败：${error?.message || error}`;
+    }
+  }
   const shouldReloadActive = activeSessionId.value === doneSessionId;
   resetStreamingState();
   if (shouldReloadActive) {
     await loadSession(doneSessionId, { keepSelection: true });
   }
   await refreshSessions();
+  if (annotationError) errorMessage.value = annotationError;
 };
 
 /**
