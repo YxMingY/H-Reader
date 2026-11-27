@@ -1,3 +1,9 @@
+<script>
+import { useTools } from '../../ChatPanel/composables/useTools';
+
+const { renderMarkdown } = useTools();
+</script>
+
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
@@ -8,14 +14,16 @@ const props = defineProps({
   saving: Boolean,
   error: { type: String, default: '' },
 });
-const emit = defineEmits(['edit', 'update:draft', 'contextmenu', 'open-conversation']);
+const emit = defineEmits(['edit', 'save', 'update:draft', 'contextmenu', 'open-conversation']);
 
 const marker = ref(null);
 const popup = ref(null);
 const textarea = ref(null);
 const reading = ref(false);
+const keepReading = ref(false);
 const position = ref({});
-const visible = computed(() => props.editing || reading.value);
+const visible = computed(() => props.editing || reading.value || keepReading.value);
+const renderedNote = computed(() => renderMarkdown(props.note.text || '空笔记'));
 let hideTimeout;
 
 function showReading() {
@@ -29,12 +37,37 @@ function hideReading() {
 }
 
 function edit() {
+  clearTimeout(hideTimeout);
   reading.value = false;
   emit('edit', props.note);
 }
 
+function toggleEditing() {
+  if (props.editing) {
+    keepReading.value = true;
+    emit('save');
+  } else {
+    edit();
+  }
+}
+
+function editFromContent(event) {
+  if (!event.target.closest('a')) edit();
+}
+
+function handleOutsidePointerDown(event) {
+  if (popup.value?.contains(event.target) || marker.value?.contains(event.target)) return;
+  if (props.editing) {
+    keepReading.value = true;
+  } else {
+    keepReading.value = false;
+    reading.value = false;
+  }
+}
+
 function openContext(event) {
   reading.value = false;
+  keepReading.value = false;
   emit('contextmenu', event, props.note);
 }
 
@@ -54,26 +87,31 @@ function placePopup() {
 
 watch(visible, async (open) => {
   if (open) {
+    document.addEventListener('pointerdown', handleOutsidePointerDown, true);
     window.addEventListener('resize', placePopup);
     window.addEventListener('scroll', placePopup, true);
     await nextTick();
     placePopup();
   } else {
+    document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
     window.removeEventListener('resize', placePopup);
     window.removeEventListener('scroll', placePopup, true);
   }
 }, { immediate: true });
 
 watch(() => props.editing, async (editing) => {
-  if (!editing) return;
-  reading.value = false;
+  if (editing) {
+    keepReading.value = false;
+    reading.value = false;
+  }
   await nextTick();
   placePopup();
-  textarea.value?.focus();
+  if (editing) textarea.value?.focus();
 }, { immediate: true });
 watch(() => props.error, placePopup, { flush: 'post' });
 onBeforeUnmount(() => {
   clearTimeout(hideTimeout);
+  document.removeEventListener('pointerdown', handleOutsidePointerDown, true);
   window.removeEventListener('resize', placePopup);
   window.removeEventListener('scroll', placePopup, true);
 });
@@ -87,11 +125,12 @@ onBeforeUnmount(() => {
     :style="{ left: `${note.x * 100}%`, top: `${note.y * 100}%` }"
     aria-label="笔记"
     :aria-expanded="visible"
+    :data-note-editing="editing ? 'true' : undefined"
     @pointerenter="showReading"
     @pointerleave="hideReading"
     @focus="showReading"
     @blur="hideReading"
-    @click.stop="edit"
+    @click.stop="toggleEditing"
     @contextmenu.prevent.stop="openContext"
   ><span class="pdf-marker-icon" aria-hidden="true">✏️</span></button>
   <Teleport to="body">
@@ -115,13 +154,13 @@ onBeforeUnmount(() => {
         />
         <div v-if="error" class="note-error" role="alert">{{ error }}</div>
       </template>
-      <button v-else type="button" class="note-content" @click="edit">{{ note.text || '空笔记' }}</button>
+      <div v-else class="note-content" v-html="renderedNote" @click="editFromContent"></div>
       <button
         v-if="note.inlineConversationId"
         type="button"
-        class="note-conversation-link"
+        class="note-action"
         :disabled="saving"
-        @click="reading = false; emit('open-conversation', note)"
+        @click="reading = false; keepReading = false; emit('open-conversation', note)"
       >查看原问答</button>
     </div>
   </Teleport>
@@ -174,12 +213,24 @@ onBeforeUnmount(() => {
   display: block;
   max-height: min(180px, 45vh);
   overflow: auto;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
   cursor: text;
 }
 
-.note-conversation-link {
+.note-content :deep(> :first-child) {
+  margin-top: 0;
+}
+
+.note-content :deep(> :last-child) {
+  margin-bottom: 0;
+}
+
+.note-content :deep(pre),
+.note-content :deep(.katex-display) {
+  overflow-x: auto;
+}
+
+.note-action {
   margin: 4px 6px 0;
   padding: 4px 7px;
   border: 1px solid #e6c66e;

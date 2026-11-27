@@ -648,6 +648,7 @@ defineExpose({
         @pin-dblclick="handlePinDoubleClick"
         @pin-remove="handleRemoveAnnotation"
         @note-edit="editNote"
+        @note-save="flushNote"
         @note-draft="updateNoteDraft"
         @note-contextmenu="handleNoteContextMenu"
         @open-inline-ask="openSavedInlineAsk"

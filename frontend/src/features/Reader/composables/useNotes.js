@@ -110,7 +110,7 @@ export function useNotes(bookPath) {
   }
 
   function saveOnOutsideClick(event) {
-    if (editing.value && !event.target.closest?.('.pdf-note-editor')) void flushNote();
+    if (editing.value && !event.target.closest?.('.pdf-note-editor, .pdf-note-marker[data-note-editing]')) void flushNote();
   }
 
   onMounted(() => document.addEventListener('pointerdown', saveOnOutsideClick, true));

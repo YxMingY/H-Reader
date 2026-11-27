@@ -42,7 +42,7 @@ const props = defineProps({
 });
 
 // 定义组件事件
-const emit = defineEmits(['pin-dblclick', 'pin-remove', 'note-edit', 'note-draft', 'note-contextmenu', 'open-inline-ask', 'inline-ask-contextmenu', 'open-note-conversation']);
+const emit = defineEmits(['pin-dblclick', 'pin-remove', 'note-edit', 'note-save', 'note-draft', 'note-contextmenu', 'open-inline-ask', 'inline-ask-contextmenu', 'open-note-conversation']);
 
 // DOM 元素引用
 const container = ref(null); // 页面容器元素
@@ -138,6 +138,7 @@ const handlePinRemove = (annotationId) => {
       :saving="savingNote"
       :error="noteSaveError"
       @edit="emit('note-edit', $event)"
+      @save="emit('note-save')"
       @update:draft="emit('note-draft', $event)"
       @contextmenu="(event, item) => emit('note-contextmenu', event, item)"
       @open-conversation="emit('open-note-conversation', $event)"
