@@ -46,6 +46,7 @@ export function useScreenshot(
         return new Promise<{
             dataUrl: string;
             anchor: { pageNum: number; x: number; y: number };
+            pinAnchor: { pageNum: number; x: number; y: number };
             position: { x: number; top: number; bottom: number };
             bounds: { left: number; top: number; width: number; height: number };
         } | null>((resolve) => {
@@ -193,6 +194,11 @@ export function useScreenshot(
                             pageNum,
                             x: (centerX - rect.left) / rect.width,
                             y: (centerY - rect.top) / rect.height,
+                        },
+                        pinAnchor: {
+                            pageNum,
+                            x: Math.max(0, (left - rect.left) / rect.width),
+                            y: Math.max(0, (top - rect.top) / rect.height),
                         },
                         position: { x: centerX, top, bottom: top + height },
                         bounds: { left, top, width, height },

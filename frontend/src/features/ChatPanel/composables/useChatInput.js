@@ -319,11 +319,14 @@ export function useChatInput(sending, errorMessage) {
    * @param {string} dataUrl - 图片的 data URL（PNG 格式）
    * @returns {Promise<void>}
    */
-  const addAttachmentFromDataUrl = async (dataUrl) => {
+  const addAttachmentFromDataUrl = async (dataUrl, { onSaved, isCurrent } = {}) => {
     const response = await fetch(dataUrl);
     const blob = await response.blob();
     const file = new File([blob], `screenshot-${Date.now()}.png`, { type: blob.type });
-    attachments.value.push(await readFileAsDualFormat(file));
+    const attachment = await readFileAsDualFormat(file);
+    if (isCurrent && !isCurrent()) throw new Error('聊天会话已切换，请重试。');
+    if (onSaved) attachment.onSaved = onSaved;
+    attachments.value.push(attachment);
   };
 
   // ========================================

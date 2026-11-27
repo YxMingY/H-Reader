@@ -7,7 +7,7 @@
  * - 右键菜单删除大头针
  * - Hover 显示提示信息
  */
-import { ref, onMounted } from 'vue';
+import { nextTick, onBeforeUnmount, ref } from 'vue';
 import { confirmDelete } from '../../../composables/useToast';
 
 // 定义组件属性
@@ -29,18 +29,41 @@ const props = defineProps({
 // 定义组件事件
 const emit = defineEmits(['dblclick', 'remove']);
 
-// 状态管理
+const pin = ref(null);
+const tooltip = ref(null);
+const tooltipPosition = ref(null);
 const isHovered = ref(false);
 
-// 组件挂载时输出调试信息
-onMounted(() => {
-    console.log('大头针渲染:', {
-        id: props.annotation.id,
-        x: props.x,
-        y: props.y,
-        pageNum: props.annotation.pageNum
-    });
-});
+function placeTooltip() {
+    if (!pin.value || !tooltip.value) return;
+    const anchor = pin.value.getBoundingClientRect();
+    const { offsetWidth: width, offsetHeight: height } = tooltip.value;
+    const gap = 8;
+    const above = anchor.top - height - gap;
+    const top = above >= gap ? above : anchor.bottom + gap;
+    const left = anchor.left + (anchor.width - width) / 2;
+    tooltipPosition.value = {
+        top: `${Math.max(gap, Math.min(top, window.innerHeight - height - gap))}px`,
+        left: `${Math.max(gap, Math.min(left, window.innerWidth - width - gap))}px`,
+    };
+}
+
+async function showTooltip() {
+    isHovered.value = true;
+    window.addEventListener('resize', placeTooltip);
+    window.addEventListener('scroll', placeTooltip, true);
+    await nextTick();
+    placeTooltip();
+}
+
+function hideTooltip() {
+    isHovered.value = false;
+    tooltipPosition.value = null;
+    window.removeEventListener('resize', placeTooltip);
+    window.removeEventListener('scroll', placeTooltip, true);
+}
+
+onBeforeUnmount(hideTooltip);
 
 /**
  * 处理双击事件
@@ -66,6 +89,7 @@ const handleContextMenu = async (event) => {
 
 <template>
     <div
+        ref="pin"
         class="annotation-pin pdf-page-marker"
         :style="{ 
             left: x + 'px', 
@@ -73,19 +97,20 @@ const handleContextMenu = async (event) => {
         }"
         @dblclick="handleDoubleClick"
         @contextmenu="handleContextMenu"
-        @mouseenter="isHovered = true"
-        @mouseleave="isHovered = false"
+        @mouseenter="showTooltip"
+        @mouseleave="hideTooltip"
     >
         <!-- 大头针图标 -->
         <div class="pdf-marker-icon">📌</div>
-        
-        <!-- Hover 提示框 -->
-        <div v-if="isHovered" class="pin-tooltip">
+
+    </div>
+    <Teleport to="body">
+        <div v-if="isHovered" ref="tooltip" class="pin-tooltip" :style="tooltipPosition || { visibility: 'hidden' }">
             <div class="tooltip-title">{{ annotation.note || 'AI 对话标记' }}</div>
             <div class="tooltip-info">双击跳转到对话</div>
             <div class="tooltip-info">右键删除标记</div>
         </div>
-    </div>
+    </Teleport>
 </template>
 
 <style scoped>
@@ -97,28 +122,36 @@ const handleContextMenu = async (event) => {
 }
 
 .pin-tooltip {
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    margin-bottom: 8px;
+    position: fixed;
+    z-index: 10000;
+    box-sizing: border-box;
+    width: max-content;
+    max-width: min(280px, calc(100vw - 16px));
+    max-height: calc(100vh - 16px);
+    overflow: hidden;
     padding: 8px 12px;
-    background: rgba(0, 0, 0, 0.85);
-    color: white;
-    border-radius: 6px;
+    border: 1px solid #d8e0e9;
+    border-radius: 8px;
+    background: #fff;
+    color: #202731;
     font-size: 12px;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
     pointer-events: none;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 16px rgb(0 0 0 / 14%);
 }
 
 .tooltip-title {
-    font-weight: bold;
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
+    white-space: pre-line;
+    font-weight: 600;
     margin-bottom: 4px;
 }
 
 .tooltip-info {
-    opacity: 0.8;
+    color: #526579;
     font-size: 11px;
 }
 </style>

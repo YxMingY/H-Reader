@@ -43,7 +43,7 @@ export function useChatStream(activeSessionId, sending, messages, errorMessage, 
   
   /** 当前流式响应的 assistant 消息索引：用于追加内容 */
   const streamAssistantIndex = ref(-1);
-  let savedSelection;
+  let savedMessageActions;
 
   /** 事件取消订阅函数列表：用于组件卸载时清理 */
   const eventUnsubscribers = [];
@@ -81,7 +81,7 @@ export function useChatStream(activeSessionId, sending, messages, errorMessage, 
 const resetStreamingState = () => {
   streamSessionId.value = '';
   streamAssistantIndex.value = -1;
-  savedSelection = undefined;
+  savedMessageActions = undefined;
   sending.value = false;
 };
 
@@ -163,7 +163,9 @@ const sendMessage = async ({ content, includeAttachments = true, onSaved } = {})
     // 步骤 5: 设置流式追踪状态
     streamSessionId.value = sessionId;
     streamAssistantIndex.value = messages.value.length - 1;
-    if (onSaved) savedSelection = { scopeType, bookPath, onSaved };
+    const firstCrop = outgoingAttachments.find(item => item.onSaved);
+    const actions = [onSaved, firstCrop?.onSaved].filter(Boolean);
+    if (actions.length) savedMessageActions = { scopeType, bookPath, actions };
 
     // 步骤 6: 清理输入
     if (content === undefined) draft.value = '';
@@ -266,16 +268,19 @@ const onStreamDone = async (event) => {
   }
 
   const doneSessionId = streamSessionId.value;
-  const selection = savedSelection;
+  const saved = savedMessageActions;
   let annotationError;
-  if (selection) {
+  if (saved) {
     try {
       // Resolve the index from saved history, which does not include optimistic rows.
-      const detail = await ChatService.LoadSession(selection.scopeType, selection.bookPath, doneSessionId);
+      const detail = await ChatService.LoadSession(saved.scopeType, saved.bookPath, doneSessionId);
       const messageIndex = detail.messages.length - 2;
       const message = detail.messages[messageIndex];
       if (message?.role !== 'user') throw new Error('无法定位已保存的用户消息');
-      await selection.onSaved({ sessionId: doneSessionId, messageIndex, content: message.content });
+      const location = { sessionId: doneSessionId, messageIndex, content: message.content };
+      const outcomes = await Promise.allSettled(saved.actions.map(async action => action(location)));
+      const failure = outcomes.find(outcome => outcome.status === 'rejected');
+      if (failure) throw failure.reason;
     } catch (error) {
       annotationError = `添加选区大头针失败：${error?.message || error}`;
     }

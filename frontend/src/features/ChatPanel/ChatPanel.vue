@@ -393,7 +393,7 @@ const applyPdfSelection = async (content, { sendImmediately = false, trailingNew
 };
 
 let screenshotSession;
-const addScreenshotToDraft = async (dataUrl) => {
+const addScreenshotToDraft = async (dataUrl, onSaved) => {
   const scope = scopeKey.value;
   if (!activeSessionId.value) {
     screenshotSession ??= createSessionAndEnter().finally(() => { screenshotSession = null; });
@@ -402,7 +402,11 @@ const addScreenshotToDraft = async (dataUrl) => {
       throw new Error(errorMessage.value || '聊天会话尚未就绪，请重试。');
     }
   }
-  await addAttachmentFromDataUrl(dataUrl);
+  const sessionId = activeSessionId.value;
+  await addAttachmentFromDataUrl(dataUrl, {
+    onSaved,
+    isCurrent: () => scope === scopeKey.value && sessionId === activeSessionId.value,
+  });
 };
 
 defineExpose({

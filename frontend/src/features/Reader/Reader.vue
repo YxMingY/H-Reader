@@ -148,7 +148,14 @@ function openNoteMenu(event, actions) {
   };
 }
 
+function pinSavedMessage(anchor, bookPath) {
+  return ({ sessionId, messageIndex, content }) => addAnnotation(
+    anchor.pageNum, anchor.x, anchor.y, sessionId, messageIndex, 1, 1, content, bookPath,
+  );
+}
+
 function showScreenshotDestinations(screenshot, addToSidebar) {
+  const onSaved = pinSavedMessage(screenshot.pinAnchor, bookPathRef.value);
   if (!hasJumped.value) dismissSelectionMenu();
   const closeAfter = (action) => async () => {
     await action();
@@ -171,7 +178,7 @@ function showScreenshotDestinations(screenshot, addToSidebar) {
       {
         id: 'screenshot-sidebar',
         label: '右侧栏提问',
-        run: closeAfter(() => addToSidebar(screenshot.dataUrl)),
+        run: closeAfter(() => addToSidebar(screenshot.dataUrl, onSaved)),
       },
     ],
   };
@@ -311,9 +318,7 @@ const selectionActions = computed(() => {
   const bookPath = bookPathRef.value;
   const sendSelection = (content) => useSelection(content, {
     sendImmediately: true,
-    onSaved: pinAnchor ? ({ sessionId, messageIndex, content }) => addAnnotation(
-      pinAnchor.pageNum, pinAnchor.x, pinAnchor.y, sessionId, messageIndex, 1, 1, content, bookPath,
-    ) : undefined,
+    onSaved: pinAnchor ? pinSavedMessage(pinAnchor, bookPath) : undefined,
   });
   return [
     { id: 'chat', label: '插入聊天', run: () => useSelection(text) },
