@@ -82,6 +82,64 @@ func TestInlineConversationPersistsFullHistoryAndSendsWindow(t *testing.T) {
 	}
 }
 
+func TestInlineStreamSendsAndPersistsImages(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("APPDATA", dir)
+	bookPath := filepath.Join(dir, "paper.pdf")
+	if err := os.WriteFile(bookPath, []byte("sample paper"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	requests := make(chan openai.ChatCompletionRequest, 1)
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request openai.ChatCompletionRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		requests <- request
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"Formula $x\"}}]}\n\n")
+		w.(http.Flusher).Flush()
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"^2$.\"}}]}\n\ndata: [DONE]\n\n")
+	}))
+	defer api.Close()
+
+	client, err := llmkit.NewClient(llmkit.Config{Provider: llmkit.ProviderOpenAI, APIKey: "test", Model: "test-model", BaseURL: api.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := &ChatService{inline: apiRoute{client: client}}
+	thread, err := service.CreateInlineConversation(bookPath, InlineAnchor{PageNum: 1, X: 0.25, Y: 0.5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const image = "data:image/jpeg;base64,/9j/2Q=="
+	var chunks []string
+	_, err = service.sendInlineQuestion(context.Background(), bookPath, thread.ID, "", []string{image}, func(chunk string) error {
+		chunks = append(chunks, chunk)
+		return nil
+	})
+	if err != nil || len(chunks) != 2 || chunks[0] != "Formula $x" || chunks[1] != "^2$." {
+		t.Fatalf("unexpected streamed chunks %q, %v", chunks, err)
+	}
+
+	request := <-requests
+	parts := request.Messages[len(request.Messages)-1].MultiContent
+	if !request.Stream || len(parts) != 2 || parts[0].ImageURL == nil || parts[0].ImageURL.URL != image || parts[1].Text != "请解释图片" {
+		t.Fatalf("unexpected streamed request: %+v", request)
+	}
+
+	saved, err := (&ChatService{}).LoadInlineConversation(bookPath, thread.ID)
+	if err != nil || len(saved.Messages) != 2 || saved.Messages[0].Content != "请解释图片" ||
+		len(saved.Messages[0].Attachments) != 1 || saved.Messages[0].Attachments[0] != image ||
+		saved.Messages[1].Content != "Formula $x^2$." {
+		t.Fatalf("unexpected saved transcript: %+v, %v", saved.Messages, err)
+	}
+}
+
 func TestDeleteInlineConversationKeepsNotesEditableAfterRestart(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)

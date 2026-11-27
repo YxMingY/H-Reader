@@ -355,6 +355,20 @@ export function SendMessageStreamInSession(scopeType, bookPath, sessionID, messa
 }
 
 /**
+ * @param {string} bookPath
+ * @param {string} id
+ * @param {string} question
+ * @param {string[]} images
+ * @param {string} requestID
+ * @returns {$CancellablePromise<$models.InlineConversation>}
+ */
+export function StreamInlineQuestion(bookPath, id, question, images, requestID) {
+    return $Call.ByID(3250421426, bookPath, id, question, images, requestID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
  * UpdateSessionTitle 更新会话标题
  * 
  * 参数：

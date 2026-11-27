@@ -11,7 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"hreader/llmkit"
 	"hreader/services/book"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 const (
@@ -167,7 +170,29 @@ func (c *ChatService) DeleteInlineConversation(bookPath, id string) error {
 }
 
 func (c *ChatService) SendInlineQuestion(ctx context.Context, bookPath, id, question string) (InlineConversation, error) {
+	return c.sendInlineQuestion(ctx, bookPath, id, question, nil, nil)
+}
+
+func (c *ChatService) StreamInlineQuestion(ctx context.Context, bookPath, id, question string, images []string, requestID string) (InlineConversation, error) {
+	if requestID == "" {
+		return InlineConversation{}, errors.New("缺少原地问请求标识")
+	}
+	return c.sendInlineQuestion(ctx, bookPath, id, question, images, func(chunk string) error {
+		application.Get().Event.Emit("inline_chat_chunk:"+requestID, chunk)
+		return nil
+	})
+}
+
+func (c *ChatService) sendInlineQuestion(ctx context.Context, bookPath, id, question string, images []string, onChunk llmkit.StreamCallback) (InlineConversation, error) {
 	question = strings.TrimSpace(question)
+	if question == "" && len(images) > 0 {
+		question = "请解释图片"
+	}
+	for _, image := range images {
+		if !strings.HasPrefix(image, "data:image/jpeg;base64,") {
+			return InlineConversation{}, errors.New("原地问图片必须是 JPEG 数据")
+		}
+	}
 	if question == "" {
 		return InlineConversation{}, errors.New("请输入问题")
 	}
@@ -205,13 +230,31 @@ func (c *ChatService) SendInlineQuestion(ctx context.Context, bookPath, id, ques
 		prompt += fmt.Sprintf("\n论文摘录：%q", quote)
 	}
 	conv.SetSystemPrompt(prompt)
+	for _, image := range images {
+		conv.AddImageBase64(image)
+	}
 	conv.AddText(question)
 
-	ctx, cancel := context.WithTimeout(ctx, chatTimeout)
-	defer cancel()
-	answer, err := conv.Send(ctx)
-	if err != nil {
-		return InlineConversation{}, err
+	var answer string
+	if onChunk == nil {
+		ctx, cancel := context.WithTimeout(ctx, chatTimeout)
+		defer cancel()
+		answer, err = conv.Send(ctx)
+		if err != nil {
+			return InlineConversation{}, err
+		}
+	} else {
+		ctx, cancel := llmkit.WithStreamTimeouts(ctx, streamFirstTimeout, streamIdleTimeout, streamTotalTimeout)
+		defer cancel()
+		var reply strings.Builder
+		err = conv.SendStream(ctx, func(chunk string) error {
+			reply.WriteString(chunk)
+			return onChunk(chunk)
+		})
+		if err != nil {
+			return InlineConversation{}, errors.New(streamErrorMessage(ctx, err))
+		}
+		answer = reply.String()
 	}
 	if strings.TrimSpace(answer) == "" {
 		return InlineConversation{}, errors.New("模型没有返回文字回答")
@@ -225,7 +268,7 @@ func (c *ChatService) SendInlineQuestion(ctx context.Context, bookPath, id, ques
 	}
 	now := time.Now().Format(time.RFC3339)
 	stored.Messages = append(stored.Messages,
-		ChatMessageRecord{Role: "user", Content: question, CreatedAt: now},
+		ChatMessageRecord{Role: "user", Content: question, Attachments: images, CreatedAt: now},
 		ChatMessageRecord{Role: "assistant", Content: answer, CreatedAt: now},
 	)
 	if err := writeJSONAtomic(path, stored); err != nil {

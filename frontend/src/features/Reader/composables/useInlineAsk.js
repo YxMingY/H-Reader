@@ -1,4 +1,6 @@
 import { computed, reactive, ref, watch } from 'vue';
+import { Events } from '@wailsio/runtime';
+import { useChatInput } from '../../ChatPanel/composables/useChatInput';
 import { ChatService } from '../../../../bindings/hreader/services/chat';
 
 export function useInlineAsk(bookPath) {
@@ -39,10 +41,29 @@ export function useInlineAsk(bookPath) {
   });
 
   function createView(anchor, id = '') {
+    const sending = ref(false);
+    const pasteFeedback = ref('');
+    const { attachments, handlePaste, removeAttachment } = useChatInput(sending, pasteFeedback);
+    const processingPaste = ref(false);
+
+    async function pasteImage(event) {
+      if (sending.value || processingPaste.value) {
+        event.preventDefault();
+        return;
+      }
+      processingPaste.value = true;
+      try {
+        await handlePaste(event);
+      } finally {
+        processingPaste.value = false;
+      }
+    }
+
     return reactive({
       key: ++nextViewKey, id, anchor, messages: [], question: '', error: '',
       path: bookPath.value, version: bookVersion,
-      loading: false, loaded: !id, sending: false,
+      loading: false, loaded: !id, sending,
+      attachments, pasteImage, removeAttachment, pasteFeedback, processingPaste, pending: null,
     });
   }
 
@@ -79,10 +100,13 @@ export function useInlineAsk(bookPath) {
   }
 
   async function send(view) {
-    const question = view.question.trim();
-    if (!question || view.sending || !view.loaded || deletedIds.has(view.id)) return;
+    const images = view.attachments.map(image => image.compressedDataUrl);
+    const question = view.question.trim() || (images.length ? '请解释图片' : '');
+    if (!question || view.sending || view.processingPaste || !view.loaded || deletedIds.has(view.id)) return;
     view.sending = true;
     view.error = '';
+    view.pasteFeedback = '';
+    let unsubscribe;
 
     try {
       if (!view.id) {
@@ -94,12 +118,23 @@ export function useInlineAsk(bookPath) {
           markers.value = [...markers.value, { id: view.id, pageNum, x, y }];
         }
       }
-      const updated = await ChatService.SendInlineQuestion(view.path, view.id, question);
+      const requestID = Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
+      view.pending = {
+        question: { role: 'user', content: question, attachments: images },
+        answer: { role: 'assistant', content: '', streaming: true },
+      };
+      unsubscribe = Events.On(`inline_chat_chunk:${requestID}`, event => {
+        view.pending.answer.content += event.data;
+      });
+      const updated = await ChatService.StreamInlineQuestion(view.path, view.id, question, images, requestID);
       view.messages = updated.messages;
       view.question = '';
+      view.attachments = [];
     } catch (error) {
       view.error = `原地问失败：${error?.message || error}`;
     } finally {
+      unsubscribe?.();
+      view.pending = null;
       view.sending = false;
     }
   }
