@@ -104,7 +104,7 @@ export function useTools() {
    * const html = renderMarkdown('# Hello\n**World**');
    * // 返回: "<h1>Hello</h1><p><strong>World</strong></p>"
    */
-  const renderMarkdown = (content) => {
+  const renderMarkdown = (content, streaming = false) => {
     const text = String(content || '');
     
     let processedText = text;
@@ -124,7 +124,10 @@ export function useTools() {
     });
     
     // 步骤 2: 转换 [...] 格式为 $$...$$
-    processedText = processedText.replace(/(?:^|\n)\[([^\]]+)\](?=$|\n)/gm, (_, formula) => {
+    const bareBlockMath = streaming
+        ? /(?:^|\n)\[([^\]]+)\](?=\r?\n)/g
+        : /(?:^|\n)\[([^\]]+)\](?=$|\n)/gm;
+    processedText = processedText.replace(bareBlockMath, (_, formula) => {
         return `\n$$${formula.trim()}$$\n`;
     });
     

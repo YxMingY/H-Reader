@@ -125,6 +125,10 @@ const props = defineProps({
     type: Function,
     required: true
   },
+  streamingMessageIndex: {
+    type: Number,
+    default: -1
+  },
   /** Reader 组件引用（用于调用 startSelectionMode） */
   readerRef: {
     type: Object,
@@ -199,7 +203,7 @@ const renderMessage = (message, index) => {
   }
 
   // 直接渲染，不做防抖
-  renderedHtml.value[index] = props.renderMarkdown(message.content);
+  renderedHtml.value[index] = props.renderMarkdown(message.content, index === props.streamingMessageIndex);
 };
 
 /**
@@ -242,6 +246,14 @@ watch(
   },
   { deep: true, immediate: true }
 );
+
+// A stream can finish without changing the text of its last chunk.
+watch(() => props.streamingMessageIndex, (index, previousIndex) => {
+  for (const messageIndex of [previousIndex, index]) {
+    const message = props.messages[messageIndex];
+    if (message) renderMessage(message, messageIndex);
+  }
+});
 
 /**
  * 获取消息的渲染结果

@@ -65,6 +65,7 @@
         :messages="messages"
         :loading-messages="loadingMessages"
         :render-markdown="renderMarkdown"
+        :streaming-message-index="streamSessionId === activeSessionId ? streamAssistantIndex : -1"
         :reader-ref="readerRef"
         :session-id="activeSessionId"
         :is-last-round="isLastRound"
