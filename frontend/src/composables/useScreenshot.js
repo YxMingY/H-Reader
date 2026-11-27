@@ -1,4 +1,4 @@
-export function useScreenshot({ chatOpen, readerRef, addImageToChat, copyImage }) {
+export function useScreenshot({ chatOpen, readerRef, addImageToChat, openChatWithImage, copyImage }) {
   async function deliverScreenshot(imageDataUrl) {
     const results = [
       { label: '复制截图到剪贴板失败', task: copyImage },
@@ -23,9 +23,24 @@ export function useScreenshot({ chatOpen, readerRef, addImageToChat, copyImage }
     await deliverScreenshot(imageDataUrl);
   }
 
+  let selectingArea = false;
   async function startAreaSelection() {
-    const imageDataUrl = await readerRef.value?.startAreaSelection();
-    if (imageDataUrl) await deliverScreenshot(imageDataUrl);
+    const reader = readerRef.value;
+    if (!reader || selectingArea) return;
+    selectingArea = true;
+    try {
+      const screenshot = await reader.startAreaSelection();
+      if (!screenshot || reader !== readerRef.value) return;
+
+      reader.showScreenshotDestinations(screenshot, openChatWithImage);
+      try {
+        await copyImage(screenshot.dataUrl);
+      } catch (error) {
+        alert(`复制截图到剪贴板失败：${error?.message || error}`);
+      }
+    } finally {
+      selectingArea = false;
+    }
   }
 
   return { captureCurrentPage, startAreaSelection };

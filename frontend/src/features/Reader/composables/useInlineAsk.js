@@ -43,7 +43,7 @@ export function useInlineAsk(bookPath) {
   function createView(anchor, id = '') {
     const sending = ref(false);
     const pasteFeedback = ref('');
-    const { attachments, handlePaste, removeAttachment } = useChatInput(sending, pasteFeedback);
+    const { attachments, addAttachmentFromDataUrl, handlePaste, removeAttachment } = useChatInput(sending, pasteFeedback);
     const processingPaste = ref(false);
 
     async function pasteImage(event) {
@@ -63,12 +63,18 @@ export function useInlineAsk(bookPath) {
       key: ++nextViewKey, id, anchor, messages: [], question: '', error: '',
       path: bookPath.value, version: bookVersion,
       loading: false, loaded: !id, sending,
-      attachments, pasteImage, removeAttachment, pasteFeedback, processingPaste, pending: null,
+      attachments, addAttachmentFromDataUrl, pasteImage, removeAttachment, pasteFeedback, processingPaste, pending: null,
     });
   }
 
   function openNew(anchor, quote) {
     active.value = createView({ ...anchor, quote });
+  }
+
+  async function openScreenshot(anchor, dataUrl) {
+    const view = createView({ ...anchor, quote: '' });
+    await view.addAttachmentFromDataUrl(dataUrl);
+    if (view.version === bookVersion) active.value = view;
   }
 
   async function load(view) {
@@ -155,5 +161,5 @@ export function useInlineAsk(bookPath) {
     active.value = null;
   }
 
-  return { active, markersByPage, loadError, openNew, openSaved, close, send, load, remove };
+  return { active, markersByPage, loadError, openNew, openScreenshot, openSaved, close, send, load, remove };
 }

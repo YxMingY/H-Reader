@@ -110,6 +110,7 @@ const {
   markersByPage: inlineMarkersByPage,
   loadError: inlineLoadError,
   openNew: openInlineAsk,
+  openScreenshot: openInlineScreenshot,
   openSaved: openSavedInlineAsk,
   close: closeInlineAsk,
   send: sendInlineQuestion,
@@ -145,6 +146,36 @@ function openNoteMenu(event, actions) {
     position: { x: event.clientX, top: event.clientY, bottom: event.clientY },
     actions,
   };
+}
+
+function showScreenshotDestinations(screenshot, addToSidebar) {
+  if (!hasJumped.value) dismissSelectionMenu();
+  const closeAfter = (action) => async () => {
+    await action();
+    if (noteMenu.value === menu) noteMenu.value = null;
+  };
+  noteMenu.value = {
+    position: screenshot.position,
+    screenshotOutline: {
+      left: `${screenshot.bounds.left}px`,
+      top: `${screenshot.bounds.top}px`,
+      width: `${screenshot.bounds.width}px`,
+      height: `${screenshot.bounds.height}px`,
+    },
+    actions: [
+      {
+        id: 'screenshot-inline',
+        label: '原地问',
+        run: closeAfter(() => openInlineScreenshot(screenshot.anchor, screenshot.dataUrl)),
+      },
+      {
+        id: 'screenshot-sidebar',
+        label: '右侧栏提问',
+        run: closeAfter(() => addToSidebar(screenshot.dataUrl)),
+      },
+    ],
+  };
+  const menu = noteMenu.value;
 }
 
 function pageActions(anchor, text, close) {
@@ -604,6 +635,7 @@ defineExpose({
   GoToPrevPage,     // 上一页方法
   captureCurrentPage,   // 截取当前页方法
   startAreaSelection,   // 开始区域选择方法
+  showScreenshotDestinations,
   // 大头针相关
   isSelectingMode,      // 是否处于选择模式
   getCurrentPageAnnotations, // 当前页的大头针列表（computed）
@@ -667,6 +699,9 @@ defineExpose({
       @close="dismissSelectionMenu"
       @editing-change="selectionInputActive = $event"
     />
+    <Teleport v-if="noteMenu?.screenshotOutline" to="body">
+      <div class="pdf-screenshot-selection pdf-screenshot-outline" :style="noteMenu.screenshotOutline" aria-hidden="true"></div>
+    </Teleport>
     <SelectionActionMenu
       v-if="noteMenu"
       :actions="noteMenu.actions"
@@ -689,6 +724,18 @@ defineExpose({
 
 
 <style>
+.pdf-screenshot-selection {
+  box-sizing: border-box;
+  border: 2px dashed #007acc;
+  background: rgba(0, 122, 204, 0.1);
+  pointer-events: none;
+}
+
+.pdf-screenshot-outline {
+  position: fixed;
+  z-index: 9999;
+}
+
 .reader-view {
   height: 100%;
   width: 100%;

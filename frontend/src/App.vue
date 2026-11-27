@@ -278,6 +278,11 @@ const insertSelectionIntoChat = async (content, options) => {
   await chatPanelRef.value.applyPdfSelection(content, options);
 };
 
+const addScreenshotToChat = async (imageDataUrl) => {
+  if (!chatPanelRef.value) throw new Error('聊天面板尚未就绪，请重试。');
+  await chatPanelRef.value.addScreenshotToDraft(imageDataUrl);
+};
+
 /**
  * 截图功能
  */
@@ -287,9 +292,11 @@ const {
 } = useScreenshot({
   chatOpen,
   readerRef,
-  addImageToChat: async (imageDataUrl) => {
-    if (!chatPanelRef.value) throw new Error('聊天面板尚未就绪，请重试。');
-    await chatPanelRef.value.addScreenshotToDraft(imageDataUrl);
+  addImageToChat: addScreenshotToChat,
+  openChatWithImage: async (imageDataUrl) => {
+    if (!chatOpen.value) toggleChatPanel();
+    await nextTick();
+    await addScreenshotToChat(imageDataUrl);
   },
   copyImage: async (imageDataUrl) => {
     if (System.IsMac()) {

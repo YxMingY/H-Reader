@@ -40,10 +40,15 @@ export function useScreenshot(
     /**
      * 开始框选区域截图
      * 
-     * @returns {Promise<string|null>} 用户选择的区域的图片 data URL，取消时返回 null
+     * 返回截图和选区位置，取消时返回 null。
      */
     const startAreaSelection = async () => {
-        return new Promise((resolve) => {
+        return new Promise<{
+            dataUrl: string;
+            anchor: { pageNum: number; x: number; y: number };
+            position: { x: number; top: number; bottom: number };
+            bounds: { left: number; top: number; width: number; height: number };
+        } | null>((resolve) => {
             // 创建遮罩层，覆盖整个屏幕
             const overlay = document.createElement('div');
             overlay.style.cssText = `
@@ -59,13 +64,9 @@ export function useScreenshot(
 
             // 创建选择框，用于显示用户拖拽的区域
             const selectionBox = document.createElement('div');
-            selectionBox.style.cssText = `
-            position: absolute;
-            border: 2px dashed #007acc;
-            background: rgba(0, 122, 204, 0.1);
-            display: none;
-            pointer-events: none;
-            `;
+            selectionBox.className = 'pdf-screenshot-selection';
+            selectionBox.style.position = 'absolute';
+            selectionBox.style.display = 'none';
             overlay.appendChild(selectionBox);
 
             let startX = 0;      // 鼠标按下时的 X 坐标
@@ -184,7 +185,18 @@ export function useScreenshot(
                     console.log(`已截取区域: ${Math.round(width)}x${Math.round(height)}`);
                     
                     cleanup();
-                    resolve(dataUrl);
+                    const centerX = left + width / 2;
+                    const centerY = top + height / 2;
+                    resolve({
+                        dataUrl,
+                        anchor: {
+                            pageNum,
+                            x: (centerX - rect.left) / rect.width,
+                            y: (centerY - rect.top) / rect.height,
+                        },
+                        position: { x: centerX, top, bottom: top + height },
+                        bounds: { left, top, width, height },
+                    });
                 } catch (err) {
                     console.error('框选截图失败:', err);
                     cleanup();
