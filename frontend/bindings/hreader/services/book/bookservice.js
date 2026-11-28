@@ -61,6 +61,14 @@ export function GetScanDir() {
 }
 
 /**
+ * @param {string} dir
+ * @returns {$CancellablePromise<boolean>}
+ */
+export function HasZoteroLibrary(dir) {
+    return $Call.ByID(1642590123, dir);
+}
+
+/**
  * LoadPDF: 读取文件内容返回给前端
  * @param {string} path
  * @returns {$CancellablePromise<string>}
@@ -78,6 +86,16 @@ export function LoadPDF(path) {
  */
 export function OpenInExplorer(path) {
     return $Call.ByID(1860070597, path);
+}
+
+/**
+ * @param {string} dir
+ * @returns {$CancellablePromise<$models.ZoteroLibrary>}
+ */
+export function ReadZoteroLibrary(dir) {
+    return $Call.ByID(3282742493, dir).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
 }
 
 /**
@@ -108,10 +126,11 @@ export function SaveReadingProgress(bookPath, page) {
  */
 export function ScanBooks(dirPath) {
     return $Call.ByID(1419679738, dirPath).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType2($result);
     }));
 }
 
 // Private type creation functions
-const $$createType0 = $models.BookInfo.createFrom;
-const $$createType1 = $Create.Array($$createType0);
+const $$createType0 = $models.ZoteroLibrary.createFrom;
+const $$createType1 = $models.BookInfo.createFrom;
+const $$createType2 = $Create.Array($$createType1);

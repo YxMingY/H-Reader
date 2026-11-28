@@ -14,6 +14,36 @@ export function useLibrary() {
     const loading = ref(false);   // 加载状态
     const scanDir = ref("");      // 当前扫描目录
 
+    const hasZotero = ref(false);
+    const zoteroMode = ref(false);
+    const zoteroLibrary = ref(null);
+    const zoteroError = ref('');
+    const zoteroLoading = ref(false);
+    let zoteroRequest = 0;
+    let scanRequest = 0;
+
+    const refreshZotero = async () => {
+        const request = ++zoteroRequest;
+        zoteroLoading.value = true;
+        zoteroError.value = '';
+        try {
+            const result = await BookService.ReadZoteroLibrary(scanDir.value);
+            if (request === zoteroRequest) zoteroLibrary.value = result;
+        } catch (error) {
+            if (request === zoteroRequest) {
+                zoteroLibrary.value = null;
+                zoteroError.value = error?.message || String(error);
+            }
+        } finally {
+            if (request === zoteroRequest) zoteroLoading.value = false;
+        }
+    };
+
+    const setZoteroMode = async (enabled) => {
+        zoteroMode.value = enabled && hasZotero.value;
+        if (zoteroMode.value) await refreshZotero();
+    };
+
     /**
      * 初始化：获取扫描目录并加载图书
      */
@@ -51,17 +81,30 @@ export function useLibrary() {
      * @returns {Promise<void>}
      */
     const loadLibrary = async (dir) => {
+        const request = ++scanRequest;
+        ++zoteroRequest;
+        zoteroMode.value = false;
+        hasZotero.value = false;
+        zoteroLibrary.value = null;
+        zoteroError.value = '';
+        zoteroLoading.value = false;
         loading.value = true;
+        const root = dir || scanDir.value;
         try {
-            const result = await BookService.ScanBooks(dir);
+            const [result, detected] = await Promise.all([
+                BookService.ScanBooks(root),
+                root ? BookService.HasZoteroLibrary(root).catch(() => false) : false,
+            ]);
+            if (request !== scanRequest) return;
             books.value = result || [];
-            console.log("扫描结果:", books.value);
+            hasZotero.value = detected;
         } catch (err) {
+            if (request !== scanRequest) return;
             console.error("扫描失败", err);
             books.value = [];
             throw err;
         } finally {
-            loading.value = false;
+            if (request === scanRequest) loading.value = false;
         }
     };
 
@@ -79,6 +122,7 @@ export function useLibrary() {
     });
 
     return {
+        hasZotero, zoteroMode, zoteroLibrary, zoteroError, zoteroLoading, setZoteroMode, refreshZotero,
         books,          // 图书列表
         loading,        // 加载状态
         scanDir,        // 扫描目录

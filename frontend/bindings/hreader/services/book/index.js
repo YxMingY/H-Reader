@@ -14,5 +14,8 @@ export {
 export {
     Annotation,
     BookInfo,
-    Note
+    Note,
+    ZoteroCollection,
+    ZoteroLibrary,
+    ZoteroPDF
 } from "./models.js";

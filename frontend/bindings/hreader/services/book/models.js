@@ -222,3 +222,160 @@ export class Note {
         return new Note(/** @type {Partial<Note>} */($$parsedSource));
     }
 }
+
+export class ZoteroCollection {
+    /**
+     * Creates a new ZoteroCollection instance.
+     * @param {Partial<ZoteroCollection>} [$$source = {}] - The source object to create the ZoteroCollection.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["id"] = 0;
+        }
+        if (!("parentId" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["parentId"] = 0;
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ZoteroCollection instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ZoteroCollection}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ZoteroCollection(/** @type {Partial<ZoteroCollection>} */($$parsedSource));
+    }
+}
+
+export class ZoteroLibrary {
+    /**
+     * Creates a new ZoteroLibrary instance.
+     * @param {Partial<ZoteroLibrary>} [$$source = {}] - The source object to create the ZoteroLibrary.
+     */
+    constructor($$source = {}) {
+        if (!("collections" in $$source)) {
+            /**
+             * @member
+             * @type {ZoteroCollection[]}
+             */
+            this["collections"] = [];
+        }
+        if (!("pdfs" in $$source)) {
+            /**
+             * @member
+             * @type {ZoteroPDF[]}
+             */
+            this["pdfs"] = [];
+        }
+        if (!("missing" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["missing"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["localApiSetup"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ZoteroLibrary instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ZoteroLibrary}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType1;
+        const $$createField1_0 = $$createType3;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("collections" in $$parsedSource) {
+            $$parsedSource["collections"] = $$createField0_0($$parsedSource["collections"]);
+        }
+        if ("pdfs" in $$parsedSource) {
+            $$parsedSource["pdfs"] = $$createField1_0($$parsedSource["pdfs"]);
+        }
+        return new ZoteroLibrary(/** @type {Partial<ZoteroLibrary>} */($$parsedSource));
+    }
+}
+
+export class ZoteroPDF {
+    /**
+     * Creates a new ZoteroPDF instance.
+     * @param {Partial<ZoteroPDF>} [$$source = {}] - The source object to create the ZoteroPDF.
+     */
+    constructor($$source = {}) {
+        if (!("book" in $$source)) {
+            /**
+             * @member
+             * @type {BookInfo}
+             */
+            this["book"] = (new BookInfo());
+        }
+        if (!("filename" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["filename"] = "";
+        }
+        if (!("collectionIds" in $$source)) {
+            /**
+             * @member
+             * @type {number[]}
+             */
+            this["collectionIds"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ZoteroPDF instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ZoteroPDF}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType4;
+        const $$createField2_0 = $$createType5;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("book" in $$parsedSource) {
+            $$parsedSource["book"] = $$createField0_0($$parsedSource["book"]);
+        }
+        if ("collectionIds" in $$parsedSource) {
+            $$parsedSource["collectionIds"] = $$createField2_0($$parsedSource["collectionIds"]);
+        }
+        return new ZoteroPDF(/** @type {Partial<ZoteroPDF>} */($$parsedSource));
+    }
+}
+
+// Private type creation functions
+const $$createType0 = ZoteroCollection.createFrom;
+const $$createType1 = $Create.Array($$createType0);
+const $$createType2 = ZoteroPDF.createFrom;
+const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = BookInfo.createFrom;
+const $$createType5 = $Create.Array($Create.Any);

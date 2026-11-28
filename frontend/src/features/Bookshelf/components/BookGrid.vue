@@ -6,7 +6,8 @@
       @keydown.space.prevent="$emit('select', book)">
       <BookCover v-if="!listView" :path="book.path" :cache="coverCache" />
       <div class="book-meta">
-        <div class="title" :title="filename">{{ listView ? filename : book.title }}</div>
+        <div class="title" :title="filename">{{ listView && !showItemTitle ? filename : book.title }}</div>
+        <div v-if="listView && showItemTitle && book.title !== filename" class="book-folder">{{ filename }}</div>
         <div class="book-folder" :title="folder">{{ folder || '扫描根目录' }}</div>
       </div>
     </div>
@@ -19,6 +20,7 @@ import BookCover from './BookCover.vue';
 defineProps({
   books: { type: Array, required: true },
   coverCache: { type: Map, required: true },
+  showItemTitle: { type: Boolean, default: false },
   listView: { type: Boolean, default: false },
 });
 
