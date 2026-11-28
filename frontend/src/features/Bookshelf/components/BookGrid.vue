@@ -1,45 +1,28 @@
 <template>
-  <div class="book-grid">
-    <div 
-      v-for="book in books" 
-      :key="book.id" 
-      class="book-card"
-      @dblclick="handleSelect(book)"
-    >
-      <div class="book-cover">
-        <div class="icon">📄</div>
-      </div>
+  <div class="book-grid" :class="{ 'list-view': listView }">
+    <div v-for="{ book, folder, filename } in books" :key="book.id" class="book-card"
+      role="button" tabindex="0" :aria-label="folder ? folder + '/' + filename : filename"
+      @dblclick="$emit('select', book)" @keydown.enter.prevent="$emit('select', book)"
+      @keydown.space.prevent="$emit('select', book)">
+      <BookCover v-if="!listView" :path="book.path" :cache="coverCache" />
       <div class="book-meta">
-        <div class="title" :title="book.title">{{ book.title }}</div>
+        <div class="title" :title="filename">{{ listView ? filename : book.title }}</div>
+        <div class="book-folder" :title="folder">{{ folder || '扫描根目录' }}</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-/**
- * BookGrid.vue - 图书网格展示组件
- * 
- * 以网格形式展示图书列表，支持双击选择
- */
+import BookCover from './BookCover.vue';
 
 defineProps({
-  books: {
-    type: Array,
-    required: true,
-    default: () => []
-  }
+  books: { type: Array, required: true },
+  coverCache: { type: Map, required: true },
+  listView: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['select']);
-
-/**
- * 处理图书选择
- * @param {Object} book - 选中的图书记录
- */
-const handleSelect = (book) => {
-  emit('select', book);
-};
+defineEmits(['select']);
 </script>
 
 <style scoped>
@@ -68,18 +51,6 @@ const handleSelect = (book) => {
   border-color: var(--accent-color);
 }
 
-.book-cover {
-  width: 80px;
-  height: 100px;
-  background: #f0f2f5;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 15px;
-  font-size: 32px;
-}
-
 .book-meta {
   text-align: center;
   width: 100%;
@@ -96,4 +67,17 @@ const handleSelect = (book) => {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.book-folder {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list-view { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.list-view .book-card:hover { transform: none; }
+.list-view .book-meta { text-align: start; }
+.list-view .title, .list-view .book-folder { display: block; white-space: normal; overflow-wrap: anywhere; }
 </style>
